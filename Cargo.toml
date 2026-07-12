@@ -1,0 +1,22 @@
+[package]
+name = "fetch"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3", default-features = false, features = ["napi9", "async", "tokio_rt", "serde-json"] }
+napi-derive = "3"
+wreq = { version = "6.0.0-rc.29", features = ["json", "cookies", "gzip", "brotli", "deflate", "charset", "socks"] }
+wreq-util = { version = "3.0.0-rc.14", features = ["emulation-serde"] }
+serde_json = "1"
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true
+strip = "symbols"

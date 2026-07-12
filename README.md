@@ -1,0 +1,420 @@
+# @trishchuk/fetch
+
+A Fetch-API-**shaped** HTTP client for Node.js, implemented as a Rust native
+addon (via [napi-rs](https://napi.rs) v3) on top of
+[`wreq`](https://github.com/0x676e67/wreq) — a hard fork of `reqwest` running
+on hyper + BoringSSL through the `btls` crate — and
+[`wreq-util`](https://github.com/0x676e67/wreq-util), which ships browser TLS
+and HTTP/2 fingerprint profiles.
+
+The point of this library is **TLS/HTTP2 fingerprint impersonation**: making
+outbound requests whose ClientHello (JA3/JA4) and HTTP/2 SETTINGS/priority
+frames (Akamai hash) match a real browser, not just an HTTP client that
+happens to have a `fetch()`-shaped API. If you don't need fingerprint control,
+`undici`/native `fetch` will be faster to build and easier to deploy (no Rust
+toolchain, no BoringSSL). Use this when the *shape of your TLS handshake* is
+part of what you're testing or evading detection on.
+
+It is **not** a drop-in `fetch` replacement — request bodies are buffered
+strings only, there is no `ReadableStream`, and the surface area is
+deliberately small. See [Known limitations](#known-limitations).
+
+## Install / build
+
+This package has no published prebuilt binaries yet — you build the native
+addon locally. You need:
+
+- Node.js (tested on Node 24)
+- [pnpm](https://pnpm.io) (`packageManager: pnpm@10.26.2` in `package.json`)
+- A Rust toolchain (`cargo`, stable channel) — building compiles `wreq`
+  against BoringSSL via the `btls` crate, which additionally needs `cmake`
+  and a C/C++ compiler on your `PATH` (see the
+  [`btls`/BoringSSL build requirements](https://github.com/rust-lang/rust-bindgen#requirements)
+  if the build fails looking for `clang`/`libclang`).
+
+```bash
+pnpm install
+
+# Release build (optimized, LTO, stripped — this is what `.node` should be
+# in normal use; the compile is slow because of LTO + BoringSSL).
+pnpm run build
+
+# Debug build (fast iteration, unoptimized binary).
+pnpm run build:debug
+
+# Run the test suite (node:test). Most tests spin up a local HTTP server;
+# a couple in test/curl-impersonate-presets.test.js hit the real
+# https://tls.peet.ws/api/all fingerprint-echo service and need network
+# access.
+pnpm test
+```
+
+Both build commands emit a platform-specific binary (e.g.
+`fetch.darwin-arm64.node`) next to `index.js`, which `index.js` loads at
+require time. `napi.targets` in `package.json` lists the platforms this crate
+is set up to cross-compile for; you still need the matching Rust target
+installed to actually build one.
+
+## Quick start
+
+```js
+const { fetch } = require('@trishchuk/fetch')
+
+async function main() {
+  const res = await fetch('https://example.com')
+
+  console.log(res.status)               // 200
+  console.log(res.ok)                   // true (status in 200..299)
+  console.log(res.headers.get('content-type'))
+  console.log(await res.text())
+}
+
+main()
+```
+
+`fetch()` never rejects on a non-2xx HTTP response — that's a normal
+`FetchResponse` with `ok: false`. It only rejects on things that prevent a
+response from existing at all: a connection/timeout failure, an unknown
+`impersonate` name, an invalid `proxy` URL, or a malformed option like a bad
+`tlsMinVersion`. Check `res.ok` / `res.status` for HTTP-level errors; use
+`try/catch` for transport-level ones.
+
+```js
+const res = await fetch('https://example.com/api')
+if (!res.ok) {
+  throw new Error(`request failed: ${res.status} ${res.statusText}`)
+}
+const data = await res.json()
+```
+
+## Use cases
+
+### 1. Basic impersonated GET/POST
+
+Every call already impersonates a browser — `chrome_147` is the default when
+`impersonate` is omitted.
+
+```js
+const { fetch } = require('@trishchuk/fetch')
+
+// GET, default profile (chrome_147)
+const res = await fetch('https://example.com')
+
+// POST with a JSON body — body is a plain string, so stringify yourself
+const created = await fetch('https://example.com/api/items', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ name: 'widget' }),
+  impersonate: 'safari_26',
+})
+console.log(created.status, await created.json())
+```
+
+### 2. Picking a curl-impersonate preset and inspecting what it resolves to
+
+`impersonate` also accepts any of the 19 preset names from
+[curl-impersonate](https://github.com/lwthiker/curl-impersonate)'s
+`browsers.json` (`chrome116`, `ff109`, `safari15_5`, ...) as a convenience for
+callers migrating from curl-impersonate wrapper scripts. `listImpersonatePresets()`
+tells you exactly which native `wreq-util` profile each one maps to, and
+whether that mapping is byte-exact.
+
+```js
+const { fetch, listImpersonatePresets } = require('@trishchuk/fetch')
+
+const presets = listImpersonatePresets()
+const chrome116 = presets.find((p) => p.name === 'chrome116')
+console.log(chrome116)
+// {
+//   name: 'chrome116',
+//   profile: 'chrome_116',   // underlying wreq-util profile
+//   platform: 'windows',
+//   browserVersion: '116.0.5845.180',
+//   exact: true,             // wreq-util ships this exact browser version
+// }
+
+const res = await fetch('https://example.com', { impersonate: 'chrome116' })
+```
+
+11 of the 19 presets are `exact: true` (wreq-util has a profile for that
+precise browser version). The other 8 predate wreq-util's oldest profile per
+browser family (Chrome/Edge/Firefox pre-2022) and resolve to the closest
+newer profile available — a nearest-neighbor approximation, not a byte-exact
+match. Check `exact` before relying on one of these for a fingerprint that
+must match a specific old browser version.
+
+### 3. Multi-request session with persistent cookies (login flow)
+
+Pass the same `session` id (and the same `impersonate`/TLS/HTTP options) on
+every call that should share a cookie jar and connection pool — exactly what
+a real browser tab does across page navigations.
+
+```js
+const { fetch } = require('@trishchuk/fetch')
+
+const session = 'user-42' // any string you control; scope it per logical user/tab
+
+const login = await fetch('https://example.com/login', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ user: 'alice', pass: 'hunter2' }),
+  session,
+})
+if (!login.ok) throw new Error(`login failed: ${login.status}`)
+
+// Same session id (and same impersonate/tlsMinVersion/tlsMaxVersion/
+// httpVersion) -> reuses the client that now holds the Set-Cookie from
+// /login. If you vary any of those fields between calls, you get a
+// *different* cached client with an empty cookie jar and the cookie won't
+// carry over.
+const profile = await fetch('https://example.com/account', { session })
+console.log(await profile.json())
+```
+
+Calls that omit `session` entirely are stateless and never share cookies with
+anyone, even other calls using the same `impersonate` profile — that's the
+default specifically so unrelated callers can't accidentally leak cookies
+into each other via a shared client.
+
+### 4. Rotating proxy per request
+
+`proxy` is applied per call, independent of client caching — it does not
+change which cached client/session a call reuses, so you can rotate proxies
+freely within one session without losing its cookie jar.
+
+```js
+const { fetch } = require('@trishchuk/fetch')
+
+const proxies = [
+  'http://user:pass@proxy1.example.com:3128',
+  'http://user:pass@proxy2.example.com:3128',
+  'socks5://proxy3.example.com:1080',
+]
+
+for (const [i, url] of ['https://a.example', 'https://b.example', 'https://c.example'].entries()) {
+  const res = await fetch(url, { proxy: proxies[i % proxies.length] })
+  console.log(url, res.status)
+}
+```
+
+### 5. Timeout
+
+```js
+const { fetch } = require('@trishchuk/fetch')
+
+try {
+  const res = await fetch('https://example.com/slow', { timeoutMs: 5000 })
+} catch (err) {
+  console.error('request timed out or failed:', err.message)
+}
+```
+
+### 6. Low-level TLS override escape hatch (`tlsOptions`)
+
+`tlsOptions` lets you hand-tune specific ClientHello fields (cipher list,
+curves, signature algorithms, extension permutation, session tickets) on top
+of whatever `impersonate` resolves to. **This is not a free lunch: any field
+you set diverges the fingerprint from the pure `impersonate` profile by
+definition.** Unset fields keep the preset's values (confirmed empirically —
+overriding only `cipherList` leaves curves, the HTTP/2 Akamai hash, and the
+User-Agent exactly as the base profile's; only the cipher-related JA3/JA4
+segments change), but every field you *do* set is a byte your traffic no
+longer shares with the real browser you're impersonating. Only reach for this
+when you need bytes the preset doesn't offer.
+
+```js
+const { fetch } = require('@trishchuk/fetch')
+
+const res = await fetch('https://example.com', {
+  impersonate: 'chrome_147',
+  tlsOptions: {
+    cipherList: 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256',
+    permuteExtensions: true,
+  },
+})
+```
+
+`tlsOptions` (like `tlsMinVersion`/`tlsMaxVersion`/`httpVersion`) is part of
+the client cache key — see [How it works](#how-it-works) — so a call with
+`tlsOptions` set gets its own cached client, isolated from calls without it
+even if `impersonate`/`session` otherwise match.
+
+## API reference
+
+Mirrors `index.d.ts` (generated from `src/lib.rs` doc comments); field names
+here are the camelCase names you use from JS.
+
+### `fetch(url, options?) => Promise<FetchResponse>`
+
+The only entry point. `url` is a full URL string. `options` is a
+`FetchOptions` object; every field is optional.
+
+### `FetchOptions`
+
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `method` | `string` | `"GET"` | HTTP method. |
+| `headers` | `Record<string, string>` | none | Request headers. One value per key (no repeated-header support). |
+| `body` | `string` | none | Request body. **String only** — no `Buffer`, `FormData`, or streams. |
+| `impersonate` | `string` | `"chrome_147"` | Fingerprint to emulate: a native `wreq-util` profile name (`"chrome_147"`, `"safari_26"`, `"firefox_142"`), a curl-impersonate preset name (`"chrome116"`, `"ff109"`, `"safari15_5"` — see `listImpersonatePresets()`), or `"random"` / `"weighted_random"`. |
+| `proxy` | `string` | none | Proxy URL for this request (`http://`, `https://`, or `socks5://`, with optional userinfo). Applied per request; does not affect client-cache reuse. |
+| `session` | `string` | none (stateless) | Opaque session id. Calls with the same (`session`, `impersonate`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one client and its cookie jar. Omitted = no cookie jar, never shared with anyone. |
+| `timeoutMs` | `number` | none (no timeout) | Overall request timeout in milliseconds. |
+| `tlsMinVersion` | `string` | profile default | Minimum TLS version to offer: `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"`. Client-level (part of the cache key). |
+| `tlsMaxVersion` | `string` | profile default | Maximum TLS version to offer. Client-level. |
+| `httpVersion` | `string` | ALPN-negotiated | Force `"http1"` or `"http2"` instead of letting ALPN pick. Client-level. |
+| `tlsOptions` | `TlsOptionsOverride` | none | Raw ClientHello overrides layered on the `impersonate` profile. **Diverges the fingerprint** — see [Use case 6](#6-low-level-tls-override-escape-hatch-tlsoptions). Client-level. |
+
+`impersonate`, `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`, and
+`tlsOptions` are all **client-level**: they determine which cached
+`wreq::Client` (and connection pool / cookie jar) a call uses. `method`,
+`headers`, `body`, `proxy`, and `timeoutMs` are **per-request** and don't
+affect caching.
+
+### `FetchResponse`
+
+| Member | Type | Meaning |
+|---|---|---|
+| `status` | `number` (readonly) | HTTP status code. |
+| `statusText` | `string` (readonly) | Canonical reason phrase for `status` from the `http` crate's table — not necessarily the literal wire reason phrase (HTTP/2 responses have none on the wire at all). |
+| `ok` | `boolean` (readonly) | `true` iff `status` is in `200..299`. |
+| `url` | `string` (readonly) | Final URL after following redirects. |
+| `redirected` | `boolean` (readonly) | `true` iff the final URL differs from the requested one. |
+| `headers` | `FetchHeaders` (getter) | Response headers. See below — **not** a plain object. |
+| `text()` | `Promise<string>` | Body decoded as UTF-8. Rejects if the body isn't valid UTF-8. |
+| `json()` | `Promise<any>` | Body parsed as JSON. Rejects on invalid JSON. |
+| `arrayBuffer()` | `Promise<Buffer>` | Raw body bytes as a Node `Buffer` (not a Web `ArrayBuffer` — close enough for most consumers, but note the type if you're doing strict Fetch-API compatibility checks). |
+
+All three body accessors are **async**, unlike a naive "already buffered so
+just return it" design — the response body is fully read before `fetch()`
+resolves, but the accessors still return `Promise`s to keep the shape
+familiar and leave room for future streaming.
+
+### `FetchHeaders`
+
+Not a plain `Record<string, string>` — a small case-insensitive header
+collection, similar in spirit to the Fetch API's `Headers`:
+
+| Method | Returns | Notes |
+|---|---|---|
+| `get(name)` | `string \| null` | Case-insensitive. If multiple headers share a name, values are joined with `", "`. |
+| `has(name)` | `boolean` | Case-insensitive. |
+| `entries()` | `Array<Array<string>>` | All header pairs (`[name, value]`), original case, in response order. |
+| `keys()` | `string[]` | All header names, original case, may contain duplicates. |
+| `values()` | `string[]` | All header values, in the same order as `keys()`. |
+
+### `listImpersonatePresets() => ImpersonatePresetInfo[]`
+
+Lists all 19 curl-impersonate preset names accepted by `impersonate`.
+
+### `ImpersonatePresetInfo`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name` | `string` | curl-impersonate preset name, e.g. `"chrome116"`. |
+| `profile` | `string` | The underlying `wreq-util` profile this preset resolves to, e.g. `"chrome_116"`. |
+| `platform` | `string` | Platform the profile emulates, e.g. `"windows"`, `"macos"`, `"android"`. |
+| `browserVersion` | `string` | Browser version curl-impersonate pinned this preset to. |
+| `exact` | `boolean` | `false` means curl-impersonate's pinned version predates `wreq-util`'s oldest profile for that browser family, so `profile` is a nearest-neighbor approximation, not a byte-exact fingerprint match. |
+
+### `TlsOptionsOverride`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `cipherList` | `string` | OpenSSL-format cipher list (same string curl-impersonate's wrapper scripts pass to `--ciphers`). |
+| `curvesList` | `string` | OpenSSL-format supported-curves list (curl's `--curves`). |
+| `sigalgsList` | `string` | OpenSSL-format signature-algorithms list. |
+| `permuteExtensions` | `boolean` | Randomize ClientHello extension order (curl's `--tls-permute-extensions`). |
+| `sessionTicket` | `boolean` | Whether to offer TLS session tickets (RFC 5077). |
+
+Only these five fields are exposed — not the full ~25-field BoringSSL option
+set (ECH GREASE, delegated credentials, PSK, key shares, etc. are
+intentionally left out; they drift across `wreq` releases and are rarely
+hand-tuned in practice).
+
+## Known limitations
+
+- **Buffered bodies only.** Both request and response bodies are fully
+  materialized in memory. There is no `ReadableStream` support in either
+  direction. Large payloads (multi-GB downloads/uploads) are not a good fit.
+- **Request body is a string, full stop.** No `Buffer`, no `FormData`/
+  multipart, no streaming upload. If you need to send binary or multipart
+  data, this library doesn't support it yet.
+- **`tlsOptions` genuinely diverges the fingerprint.** It composes with
+  `impersonate` rather than clobbering it (unset fields keep the profile's
+  values), but every field you *do* set is, by construction, no longer what
+  the impersonated browser would send. Don't reach for it unless you've
+  confirmed you need it.
+- **No cookie access outside sessions.** Cookies are only observable as a side
+  effect of reusing a `session`; there's no API to read/set/clear individual
+  cookies directly.
+- **No per-request header repetition.** `headers` is `Record<string,
+  string>` — you can't send the same header name twice.
+- **`statusText` honesty note.** It's the canonical reason phrase from the
+  `http` crate's status table, not necessarily the literal bytes on the wire
+  (HTTP/2 doesn't have a wire reason phrase at all). Low-stakes, but don't
+  treat it as a raw passthrough.
+- This is a **from-scratch, purpose-built client**, not a general-purpose
+  `fetch`/`undici` replacement. If you don't need TLS/HTTP2 fingerprint
+  control, use something with a bigger surface area and less native-build
+  overhead.
+
+## How it works
+
+The client is built on [`wreq`](https://github.com/0x676e67/wreq) (a
+`reqwest` fork) running on `hyper` with BoringSSL as its TLS backend (via the
+`btls` crate, rather than the usual `rustls`/OpenSSL choices) — BoringSSL is
+what lets it produce the exact ClientHello byte layout real Chrome/Firefox/
+Safari builds produce, because Chrome itself is built on BoringSSL.
+[`wreq-util`](https://github.com/0x676e67/wreq-util) supplies ready-made
+`Emulation` profiles (TLS options + HTTP/1/2 settings + default headers) per
+browser/version/platform; `impersonate` selects one of those, or a
+curl-impersonate preset name that's mapped onto the closest `wreq-util`
+profile (see `CURL_IMPERSONATE_PRESETS` in `src/lib.rs`).
+
+Every distinct combination of (`impersonate`, `session`, `tlsMinVersion`,
+`tlsMaxVersion`, `httpVersion`, `tlsOptions`) gets its own cached
+`wreq::Client`, keyed by a `ClientKey` (see `get_or_build_client` in
+`src/lib.rs`). This isn't an optimization detail you can ignore — it's
+load-bearing for correctness:
+
+- **The TLS/HTTP2 fingerprint is a property of the client/connection, not of
+  an individual request.** A `wreq::Client` is built once from an
+  `Emulation` config and reuses that config (and its connection pool) for
+  every request sent through it. There's no way to vary the fingerprint
+  per-request on a shared client, so distinct fingerprints require distinct
+  clients.
+- **Cookies are a property of the client, not of a request either.** A
+  cookie jar is attached only when `session` is set (`cookie_store(key.session.is_some())`).
+  Two calls only share cookies if they resolve to the *same* cache key —
+  which is why `session` alone isn't enough; `impersonate`/TLS/HTTP-version
+  have to match too, otherwise you'd silently get a different client with an
+  empty jar.
+- `random`/`weighted_random` pick one profile the first time they're
+  requested for a given cache key and then keep reusing that same client —
+  matching how a real browser session sticks to one fingerprint rather than
+  re-randomizing every request.
+
+`tlsOptions` overrides are applied by mutating the resolved `Emulation`'s own
+`tls_options` struct field-by-field *before* it's handed to the client
+builder, rather than replacing the whole TLS config wholesale — that's what
+lets an override of, say, only `cipherList` leave curves, HTTP/2 settings,
+and headers untouched. This was verified empirically against
+`https://tls.peet.ws/api/all`, not just assumed from reading the `wreq` API:
+overriding only the cipher list left curves, the HTTP/2 Akamai hash, and the
+`User-Agent` unchanged, with only the cipher-related JA3/JA4 segments
+differing from the base profile's.
+
+Other empirically confirmed facts (against `tls.peet.ws`, not mocked):
+
+- Custom request headers do not corrupt the HTTP/2 fingerprint — the Akamai
+  hash is identical with and without custom headers on the same profile.
+- `chrome116` (curl-impersonate preset) produces `sec-ch-ua`, `User-Agent`,
+  `Accept`, and `sec-fetch-*` headers matching curl-impersonate's actual
+  `curl_chrome116` wrapper script nearly byte-for-byte.
+- JA4's first segment (e.g. `t13d1516h2` vs `t13d1517h2`) can flip between a
+  fresh TLS handshake and a session-resumed one on the *same* client. This is
+  expected BoringSSL/browser session-ticket behavior, not a bug — compare the
+  cipher-suite/extension-hash segments of JA4 instead of the whole string if
+  you're asserting fingerprint equality in tests (see
+  `test/curl-impersonate-presets.test.js`).

@@ -1,0 +1,33 @@
+{
+  "name": "@trishchuk/fetch",
+  "version": "1.0.0",
+  "description": "Fetch API-shaped HTTP client for Node.js (buffered bodies, no streaming yet), backed by a Rust (wreq/hyper/BoringSSL) native addon with TLS/HTTP2 fingerprint emulation",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "binaryName": "fetch",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.26.2",
+  "devDependencies": {
+    "@napi-rs/cli": "^3.7.2"
+  }
+}
