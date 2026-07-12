@@ -257,16 +257,18 @@ The only entry point. `url` is a full URL string. `options` is a
 | `headers` | `Record<string, string>` | none | Request headers. One value per key (no repeated-header support). |
 | `body` | `string` | none | Request body. **String only** — no `Buffer`, `FormData`, or streams. |
 | `impersonate` | `string` | `"chrome_147"` | Fingerprint to emulate: a native `wreq-util` profile name (`"chrome_147"`, `"safari_26"`, `"firefox_142"`), a curl-impersonate preset name (`"chrome116"`, `"ff109"`, `"safari15_5"` — see `listImpersonatePresets()`), or `"random"` / `"weighted_random"`. |
+| `platform` | `string` | profile default | Declared OS for User-Agent/client-hint headers: `"windows"`, `"macos"`, `"linux"`, `"android"`, or `"ios"`. Client-level; has no effect for random profiles. |
 | `proxy` | `string` | none | Proxy URL for this request (`http://`, `https://`, or `socks5://`, with optional userinfo). Applied per request; does not affect client-cache reuse. |
 | `session` | `string` | none (stateless) | Opaque session id. Calls with the same (`session`, `impersonate`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one client and its cookie jar. Omitted = no cookie jar, never shared with anyone. |
 | `timeoutMs` | `number` | none (no timeout) | Overall request timeout in milliseconds. |
+| `maxResponseBytes` | `number` | `33,554,432` (32 MiB) | Hard limit for the fully buffered response body. The request rejects if the decoded body exceeds it. |
 | `tlsMinVersion` | `string` | profile default | Minimum TLS version to offer: `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"`. Client-level (part of the cache key). |
 | `tlsMaxVersion` | `string` | profile default | Maximum TLS version to offer. Client-level. |
 | `httpVersion` | `string` | ALPN-negotiated | Force `"http1"` or `"http2"` instead of letting ALPN pick. Client-level. |
 | `tlsOptions` | `TlsOptionsOverride` | none | Raw ClientHello overrides layered on the `impersonate` profile. **Diverges the fingerprint** — see [Use case 6](#6-low-level-tls-override-escape-hatch-tlsoptions). Client-level. |
 
-`impersonate`, `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`, and
-`tlsOptions` are all **client-level**: they determine which cached
+`impersonate`, `platform`, `session`, `tlsMinVersion`, `tlsMaxVersion`,
+`httpVersion`, and `tlsOptions` are all **client-level**: they determine which cached
 `wreq::Client` (and connection pool / cookie jar) a call uses. `method`,
 `headers`, `body`, `proxy`, and `timeoutMs` are **per-request** and don't
 affect caching.
@@ -289,6 +291,13 @@ All three body accessors are **async**, unlike a naive "already buffered so
 just return it" design — the response body is fully read before `fetch()`
 resolves, but the accessors still return `Promise`s to keep the shape
 familiar and leave room for future streaming.
+
+### `clearSession(session) => number`
+
+Drops every cached client for `session`, including its in-memory cookie jar.
+Returns the number of cached client variants removed. Use this on logout or
+when a session id is no longer valid. `clearClientCache()` clears every cached
+client and is intended for controlled process/test boundaries.
 
 ### `FetchHeaders`
 
@@ -336,7 +345,9 @@ hand-tuned in practice).
 
 - **Buffered bodies only.** Both request and response bodies are fully
   materialized in memory. There is no `ReadableStream` support in either
-  direction. Large payloads (multi-GB downloads/uploads) are not a good fit.
+  direction. Response bodies are capped at 32 MiB by default; use
+  `maxResponseBytes` to select a different explicit bound. Large payloads
+  (multi-GB downloads/uploads) are not a good fit.
 - **Request body is a string, full stop.** No `Buffer`, no `FormData`/
   multipart, no streaming upload. If you need to send binary or multipart
   data, this library doesn't support it yet.
@@ -365,10 +376,27 @@ hand-tuned in practice).
   stack, below anything a userspace TLS/HTTP library (this one included) can
   reach. A detector that cross-checks TLS fingerprint against TCP/IP
   fingerprint can catch a "Windows Chrome" TLS profile running over a
-  macOS/Linux TCP stack as inconsistent. If your product needs the TCP layer
-  to match too, that requires OS-level spoofing (e.g. running inside a VM/
-  container whose kernel matches the impersonated OS) — out of scope for
-  this library entirely.
+  macOS/Linux TCP stack as inconsistent.
+
+  Fixing this requires the TCP/IP layer to actually match, which means
+  running on a host whose *kernel* is the OS you're declaring — not
+  something a userspace library can do, and not as simple as "run it in a
+  container" either. A container shares its host's kernel rather than
+  bringing its own, so it can only make you look like whatever OS is
+  actually running underneath. `docker/` in this repo has a
+  Linux-coherent setup (Linux container + `platform: 'linux'`) plus
+  `docker/verify-tcp-coherence.js` to check it against a live
+  fingerprinting service — and that verification **caught a real gap**:
+  on Docker Desktop for Mac, the container's egress traffic is NATed
+  through the macOS host's own network stack, so `tcpip.os_guess` still
+  said `"macOS / iOS"` from *inside* a genuinely-Linux container (`uname
+  -a` correctly said Linux; the wire-level TCP fingerprint didn't care).
+  This setup only buys real coherence on an actual Linux Docker host
+  (bare metal or a cloud VM) — verify there before relying on it. For
+  non-Linux targets (declaring Windows/macOS TCP/IP), the only remaining
+  options are running on real hardware/VMs of that OS, or a privileged
+  raw-socket packet rewriter that intercepts and edits outbound SYN
+  packets — both outside this library's scope.
 - This is a **from-scratch, purpose-built client**, not a general-purpose
   `fetch`/`undici` replacement. If you don't need TLS/HTTP2 fingerprint
   control, use something with a bigger surface area and less native-build

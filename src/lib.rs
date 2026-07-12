@@ -1,9 +1,10 @@
 #![deny(clippy::all)]
 
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::time::{Duration, Instant};
 
+use futures_util::StreamExt;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use wreq::tls::TlsVersion;
@@ -35,6 +36,7 @@ struct TlsOptionsKey {
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct ClientKey {
     impersonate: String,
+    platform: Option<String>,
     session: Option<String>,
     tls_min_version: Option<String>,
     tls_max_version: Option<String>,
@@ -42,9 +44,23 @@ struct ClientKey {
     tls_options: Option<TlsOptionsKey>,
 }
 
-type ClientCache = Mutex<HashMap<ClientKey, Client>>;
+struct CachedClient {
+    client: Client,
+    last_used: Instant,
+}
+
+type ClientCache = Mutex<HashMap<ClientKey, CachedClient>>;
 
 static CLIENTS: OnceLock<ClientCache> = OnceLock::new();
+
+/// Bound the process-wide cache even when callers pass arbitrary session ids
+/// or TLS overrides. Evicted clients are dropped; in-flight requests keep the
+/// clone they already received.
+const MAX_CACHED_CLIENTS: usize = 256;
+
+/// A buffered API still needs a hard ceiling to avoid an untrusted response
+/// exhausting the Node process. Callers can lower or raise this per request.
+const DEFAULT_MAX_RESPONSE_BYTES: u32 = 32 * 1024 * 1024;
 
 /// Default browser fingerprint used when `impersonate` is not supplied.
 const DEFAULT_IMPERSONATE: &str = "chrome_147";
@@ -70,25 +86,139 @@ struct CurlImpersonatePreset {
 /// pre-2022 curl-impersonate presets (chrome99, edge99, ff91esr..ff102) are
 /// approximated with the oldest available profile rather than dropped.
 const CURL_IMPERSONATE_PRESETS: &[CurlImpersonatePreset] = &[
-    CurlImpersonatePreset { name: "chrome99", profile: Profile::Chrome100, platform: Platform::Windows, browser_version: "99.0.4844.51", exact: false },
-    CurlImpersonatePreset { name: "chrome100", profile: Profile::Chrome100, platform: Platform::Windows, browser_version: "100.0.4896.127", exact: true },
-    CurlImpersonatePreset { name: "chrome101", profile: Profile::Chrome101, platform: Platform::Windows, browser_version: "101.0.4951.67", exact: true },
-    CurlImpersonatePreset { name: "chrome104", profile: Profile::Chrome104, platform: Platform::Windows, browser_version: "104.0.5112.81", exact: true },
-    CurlImpersonatePreset { name: "chrome107", profile: Profile::Chrome107, platform: Platform::Windows, browser_version: "107.0.5304.107", exact: true },
-    CurlImpersonatePreset { name: "chrome110", profile: Profile::Chrome110, platform: Platform::Windows, browser_version: "110.0.5481.177", exact: true },
-    CurlImpersonatePreset { name: "chrome116", profile: Profile::Chrome116, platform: Platform::Windows, browser_version: "116.0.5845.180", exact: true },
-    CurlImpersonatePreset { name: "chrome99_android", profile: Profile::Chrome100, platform: Platform::Android, browser_version: "99.0.4844.73", exact: false },
-    CurlImpersonatePreset { name: "edge99", profile: Profile::Edge101, platform: Platform::Windows, browser_version: "99.0.1150.30", exact: false },
-    CurlImpersonatePreset { name: "edge101", profile: Profile::Edge101, platform: Platform::Windows, browser_version: "101.0.1210.47", exact: true },
-    CurlImpersonatePreset { name: "ff91esr", profile: Profile::Firefox109, platform: Platform::Windows, browser_version: "91.6.0esr", exact: false },
-    CurlImpersonatePreset { name: "ff95", profile: Profile::Firefox109, platform: Platform::Windows, browser_version: "95.0.2", exact: false },
-    CurlImpersonatePreset { name: "ff98", profile: Profile::Firefox109, platform: Platform::Windows, browser_version: "98.0", exact: false },
-    CurlImpersonatePreset { name: "ff100", profile: Profile::Firefox109, platform: Platform::Windows, browser_version: "100.0", exact: false },
-    CurlImpersonatePreset { name: "ff102", profile: Profile::Firefox109, platform: Platform::Windows, browser_version: "102.0", exact: false },
-    CurlImpersonatePreset { name: "ff109", profile: Profile::Firefox109, platform: Platform::Windows, browser_version: "109.0", exact: true },
-    CurlImpersonatePreset { name: "ff117", profile: Profile::Firefox117, platform: Platform::Windows, browser_version: "117.0.1", exact: true },
-    CurlImpersonatePreset { name: "safari15_3", profile: Profile::Safari15_3, platform: Platform::MacOS, browser_version: "15.3", exact: true },
-    CurlImpersonatePreset { name: "safari15_5", profile: Profile::Safari15_5, platform: Platform::MacOS, browser_version: "15.5", exact: true },
+    CurlImpersonatePreset {
+        name: "chrome99",
+        profile: Profile::Chrome100,
+        platform: Platform::Windows,
+        browser_version: "99.0.4844.51",
+        exact: false,
+    },
+    CurlImpersonatePreset {
+        name: "chrome100",
+        profile: Profile::Chrome100,
+        platform: Platform::Windows,
+        browser_version: "100.0.4896.127",
+        exact: true,
+    },
+    CurlImpersonatePreset {
+        name: "chrome101",
+        profile: Profile::Chrome101,
+        platform: Platform::Windows,
+        browser_version: "101.0.4951.67",
+        exact: true,
+    },
+    CurlImpersonatePreset {
+        name: "chrome104",
+        profile: Profile::Chrome104,
+        platform: Platform::Windows,
+        browser_version: "104.0.5112.81",
+        exact: true,
+    },
+    CurlImpersonatePreset {
+        name: "chrome107",
+        profile: Profile::Chrome107,
+        platform: Platform::Windows,
+        browser_version: "107.0.5304.107",
+        exact: true,
+    },
+    CurlImpersonatePreset {
+        name: "chrome110",
+        profile: Profile::Chrome110,
+        platform: Platform::Windows,
+        browser_version: "110.0.5481.177",
+        exact: true,
+    },
+    CurlImpersonatePreset {
+        name: "chrome116",
+        profile: Profile::Chrome116,
+        platform: Platform::Windows,
+        browser_version: "116.0.5845.180",
+        exact: true,
+    },
+    CurlImpersonatePreset {
+        name: "chrome99_android",
+        profile: Profile::Chrome100,
+        platform: Platform::Android,
+        browser_version: "99.0.4844.73",
+        exact: false,
+    },
+    CurlImpersonatePreset {
+        name: "edge99",
+        profile: Profile::Edge101,
+        platform: Platform::Windows,
+        browser_version: "99.0.1150.30",
+        exact: false,
+    },
+    CurlImpersonatePreset {
+        name: "edge101",
+        profile: Profile::Edge101,
+        platform: Platform::Windows,
+        browser_version: "101.0.1210.47",
+        exact: true,
+    },
+    CurlImpersonatePreset {
+        name: "ff91esr",
+        profile: Profile::Firefox109,
+        platform: Platform::Windows,
+        browser_version: "91.6.0esr",
+        exact: false,
+    },
+    CurlImpersonatePreset {
+        name: "ff95",
+        profile: Profile::Firefox109,
+        platform: Platform::Windows,
+        browser_version: "95.0.2",
+        exact: false,
+    },
+    CurlImpersonatePreset {
+        name: "ff98",
+        profile: Profile::Firefox109,
+        platform: Platform::Windows,
+        browser_version: "98.0",
+        exact: false,
+    },
+    CurlImpersonatePreset {
+        name: "ff100",
+        profile: Profile::Firefox109,
+        platform: Platform::Windows,
+        browser_version: "100.0",
+        exact: false,
+    },
+    CurlImpersonatePreset {
+        name: "ff102",
+        profile: Profile::Firefox109,
+        platform: Platform::Windows,
+        browser_version: "102.0",
+        exact: false,
+    },
+    CurlImpersonatePreset {
+        name: "ff109",
+        profile: Profile::Firefox109,
+        platform: Platform::Windows,
+        browser_version: "109.0",
+        exact: true,
+    },
+    CurlImpersonatePreset {
+        name: "ff117",
+        profile: Profile::Firefox117,
+        platform: Platform::Windows,
+        browser_version: "117.0.1",
+        exact: true,
+    },
+    CurlImpersonatePreset {
+        name: "safari15_3",
+        profile: Profile::Safari15_3,
+        platform: Platform::MacOS,
+        browser_version: "15.3",
+        exact: true,
+    },
+    CurlImpersonatePreset {
+        name: "safari15_5",
+        profile: Profile::Safari15_5,
+        platform: Platform::MacOS,
+        browser_version: "15.5",
+        exact: true,
+    },
 ];
 
 fn find_curl_impersonate_preset(name: &str) -> Option<&'static CurlImpersonatePreset> {
@@ -113,34 +243,77 @@ fn client_cache() -> &'static ClientCache {
     CLIENTS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Resolves an `impersonate` name to the full `wreq::Emulation` config
-/// (TLS/HTTP1/HTTP2 options + headers) that `.tls_options` overrides then
-/// mutate in place, so returning the fully-converted type here — rather than
-/// the `wreq_util::Emulation` *selector* — is what makes those overrides
-/// possible without redoing the profile→config conversion ourselves.
-fn resolve_emulation(name: &str) -> Result<wreq::Emulation> {
+fn lock_client_cache() -> Result<MutexGuard<'static, HashMap<ClientKey, CachedClient>>> {
+    client_cache().lock().map_err(|_| {
+        Error::new(
+            Status::GenericFailure,
+            "client cache is unavailable because a previous operation panicked",
+        )
+    })
+}
+
+fn parse_platform(name: &str) -> Result<Platform> {
+    match name {
+        "windows" => Ok(Platform::Windows),
+        "macos" => Ok(Platform::MacOS),
+        "linux" => Ok(Platform::Linux),
+        "android" => Ok(Platform::Android),
+        "ios" => Ok(Platform::IOS),
+        other => Err(Error::new(
+            Status::InvalidArg,
+            format!("unsupported platform '{other}', expected one of \"windows\", \"macos\", \"linux\", \"android\", \"ios\""),
+        )),
+    }
+}
+
+/// Resolves an `impersonate` name (plus an optional `platform` override) to
+/// the full `wreq::Emulation` config (TLS/HTTP1/HTTP2 options + headers) that
+/// `.tls_options` overrides then mutate in place, so returning the
+/// fully-converted type here — rather than the `wreq_util::Emulation`
+/// *selector* — is what makes those overrides possible without redoing the
+/// profile→config conversion ourselves.
+///
+/// Unlike `tls_options`, overriding `platform` does **not** diverge the TLS
+/// fingerprint: wreq-util's `Platform` only changes platform-specific
+/// headers/User-Agent, not `tls_options`/`http2_options` — see its doc
+/// comment. That's what makes it safe to use for OS coherence (e.g. running
+/// in a Linux container and wanting the declared platform to say "Linux"
+/// too) without the "this diverges the fingerprint" caveat `tls_options` has.
+fn resolve_emulation(name: &str, platform_override: Option<Platform>) -> Result<wreq::Emulation> {
     if let Some(preset) = find_curl_impersonate_preset(name) {
         return Ok(EmulationProfile::builder()
             .profile(preset.profile)
-            .platform(preset.platform)
+            .platform(platform_override.unwrap_or(preset.platform))
             .build()
             .into_emulation());
     }
 
     match name {
+        // `platform` has no effect on random/weighted_random: `Emulation`'s
+        // `profile`/`platform` fields are private, so there's no way to pull
+        // the profile a random pick landed on back out and rebuild it with a
+        // different platform. weighted_random() already only pairs profiles
+        // with platforms they realistically ship on, so this isn't a big loss.
         "random" => Ok(EmulationProfile::random().into_emulation()),
         "weighted_random" => Ok(EmulationProfile::weighted_random().into_emulation()),
         other => {
-            let profile: Profile =
-                serde_json::from_value(serde_json::Value::String(other.to_string())).map_err(
-                    |e| {
-                        Error::new(
-                            Status::InvalidArg,
-                            format!("unknown impersonate profile '{other}': {e}"),
-                        )
-                    },
-                )?;
-            Ok(profile.into_emulation())
+            let profile: Profile = serde_json::from_value(serde_json::Value::String(
+                other.to_string(),
+            ))
+            .map_err(|e| {
+                Error::new(
+                    Status::InvalidArg,
+                    format!("unknown impersonate profile '{other}': {e}"),
+                )
+            })?;
+            match platform_override {
+                Some(platform) => Ok(EmulationProfile::builder()
+                    .profile(profile)
+                    .platform(platform)
+                    .build()
+                    .into_emulation()),
+                None => Ok(profile.into_emulation()),
+            }
         }
     }
 }
@@ -166,14 +339,17 @@ fn parse_tls_version(version: &str) -> Result<TlsVersion> {
 /// is set, so anonymous calls (no session) never accidentally share cookies
 /// with unrelated callers that happen to use the same profile.
 fn get_or_build_client(key: ClientKey) -> Result<Client> {
-    {
-        let cache = client_cache().lock().unwrap();
-        if let Some(client) = cache.get(&key) {
-            return Ok(client.clone());
-        }
+    // Keep the lock through construction. Client construction performs no
+    // network I/O, and this makes the first two concurrent calls to the same
+    // session share one cookie jar instead of racing to create two of them.
+    let mut cache = lock_client_cache()?;
+    if let Some(entry) = cache.get_mut(&key) {
+        entry.last_used = Instant::now();
+        return Ok(entry.client.clone());
     }
 
-    let mut emulation = resolve_emulation(&key.impersonate)?;
+    let platform = key.platform.as_deref().map(parse_platform).transpose()?;
+    let mut emulation = resolve_emulation(&key.impersonate, platform)?;
 
     // Mutate the preset's own `tls_options` in place rather than calling
     // `ClientBuilder::tls_options()` afterwards: that setter does a wholesale
@@ -226,11 +402,29 @@ fn get_or_build_client(key: ClientKey) -> Result<Client> {
         None => {}
     }
 
-    let client = builder
-        .build()
-        .map_err(|e| Error::new(Status::GenericFailure, format!("failed to build client: {e}")))?;
+    let client = builder.build().map_err(|e| {
+        Error::new(
+            Status::GenericFailure,
+            format!("failed to build client: {e}"),
+        )
+    })?;
 
-    client_cache().lock().unwrap().insert(key, client.clone());
+    if cache.len() >= MAX_CACHED_CLIENTS {
+        if let Some(oldest_key) = cache
+            .iter()
+            .min_by_key(|(_, entry)| entry.last_used)
+            .map(|(key, _)| key.clone())
+        {
+            cache.remove(&oldest_key);
+        }
+    }
+    cache.insert(
+        key,
+        CachedClient {
+            client: client.clone(),
+            last_used: Instant::now(),
+        },
+    );
     Ok(client)
 }
 
@@ -245,12 +439,23 @@ pub struct FetchOptions {
     /// see `listImpersonatePresets()`), or "random" / "weighted_random".
     /// Defaults to "chrome_147".
     pub impersonate: Option<String>,
+    /// Overrides the platform `impersonate` declares in headers/User-Agent:
+    /// "windows", "macos", "linux", "android", or "ios". Defaults to
+    /// whatever `impersonate` resolves to (a curl-impersonate preset's own
+    /// platform, or "macos" for a bare wreq-util profile name). Unlike
+    /// `tlsOptions`, this does **not** diverge the TLS fingerprint — it only
+    /// changes declared-platform headers (`sec-ch-ua-platform`, User-Agent),
+    /// which is exactly what you want when e.g. running in a Linux container
+    /// and need the declared platform to match the host's real TCP/IP stack
+    /// instead of clashing with it. No effect when `impersonate` is
+    /// "random"/"weighted_random". Client-level — see `session`.
+    pub platform: Option<String>,
     /// Proxy URL for this request, e.g. "http://user:pass@host:3128" or
     /// "socks5://host:1080". Applied per request; does not affect which
     /// client/connection-pool this call reuses.
     pub proxy: Option<String>,
-    /// Opaque session id. Calls sharing the same (`impersonate`, `session`,
-    /// `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one underlying
+    /// Opaque session id. Calls sharing the same (`impersonate`, `platform`,
+    /// `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one underlying
     /// client with a persistent cookie jar, so cookies carry across calls the
     /// way they would in a real browser tab. Omit for stateless, cookie-less
     /// calls (the default) — this avoids unrelated callers on the same
@@ -258,6 +463,8 @@ pub struct FetchOptions {
     pub session: Option<String>,
     /// Overall request timeout in milliseconds.
     pub timeout_ms: Option<u32>,
+    /// Maximum buffered response body size in bytes. Defaults to 32 MiB.
+    pub max_response_bytes: Option<u32>,
     /// Minimum TLS version to offer during the handshake: "1.0", "1.1",
     /// "1.2", or "1.3". Client-level — see `session`.
     pub tls_min_version: Option<String>,
@@ -321,6 +528,26 @@ pub fn list_impersonate_presets() -> Vec<ImpersonatePresetInfo> {
         .collect()
 }
 
+/// Removes every cached client (and its in-memory cookie jar) for a session.
+/// Existing in-flight requests continue with their already-cloned client.
+#[napi]
+pub fn clear_session(session: String) -> Result<u32> {
+    let mut cache = lock_client_cache()?;
+    let count_before = cache.len();
+    cache.retain(|key, _| key.session.as_deref() != Some(session.as_str()));
+    Ok((count_before - cache.len()) as u32)
+}
+
+/// Clears all cached clients. Intended for controlled shutdown or test/setup
+/// boundaries; it also drops all in-memory session cookies.
+#[napi]
+pub fn clear_client_cache() -> Result<u32> {
+    let mut cache = lock_client_cache()?;
+    let count = cache.len() as u32;
+    cache.clear();
+    Ok(count)
+}
+
 #[napi]
 pub struct FetchHeaders {
     entries: Vec<(String, String)>,
@@ -345,7 +572,9 @@ impl FetchHeaders {
 
     #[napi]
     pub fn has(&self, name: String) -> bool {
-        self.entries.iter().any(|(k, _)| k.eq_ignore_ascii_case(&name))
+        self.entries
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case(&name))
     }
 
     #[napi]
@@ -417,9 +646,11 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
         headers: None,
         body: None,
         impersonate: None,
+        platform: None,
         proxy: None,
         session: None,
         timeout_ms: None,
+        max_response_bytes: None,
         tls_min_version: None,
         tls_max_version: None,
         http_version: None,
@@ -431,6 +662,7 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
             .impersonate
             .clone()
             .unwrap_or_else(|| DEFAULT_IMPERSONATE.to_string()),
+        platform: options.platform,
         session: options.session,
         tls_min_version: options.tls_min_version,
         tls_max_version: options.tls_max_version,
@@ -454,7 +686,24 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
     let mut builder = client.request(method, url);
 
     if let Some(headers) = options.headers {
+        // N-API maps a JS object into HashMap, whose iteration order is
+        // randomized. Sort before applying to make outgoing custom headers
+        // deterministic, and reject case-only duplicates that would otherwise
+        // become repeated HTTP headers in wreq.
+        let mut headers: Vec<_> = headers.into_iter().collect();
+        headers.sort_unstable_by(|(left, _), (right, _)| {
+            left.to_ascii_lowercase()
+                .cmp(&right.to_ascii_lowercase())
+                .then_with(|| left.cmp(right))
+        });
+        let mut seen = HashSet::with_capacity(headers.len());
         for (key, value) in headers {
+            if !seen.insert(key.to_ascii_lowercase()) {
+                return Err(Error::new(
+                    Status::InvalidArg,
+                    format!("duplicate header name (case-insensitive): '{key}'"),
+                ));
+            }
             builder = builder.header(key, value);
         }
     }
@@ -465,7 +714,10 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
 
     if let Some(proxy_url) = options.proxy {
         let proxy = Proxy::all(proxy_url.clone()).map_err(|e| {
-            Error::new(Status::InvalidArg, format!("invalid proxy '{proxy_url}': {e}"))
+            Error::new(
+                Status::InvalidArg,
+                format!("invalid proxy '{proxy_url}': {e}"),
+            )
         })?;
         builder = builder.proxy(proxy);
     }
@@ -500,11 +752,29 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
         })
         .collect();
 
-    let body = response
-        .bytes()
-        .await
-        .map_err(|e| Error::new(Status::GenericFailure, format!("failed to read body: {e}")))?
-        .to_vec();
+    let max_response_bytes = options
+        .max_response_bytes
+        .unwrap_or(DEFAULT_MAX_RESPONSE_BYTES) as usize;
+    let mut stream = response.bytes_stream();
+    let mut body = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| {
+            Error::new(
+                Status::GenericFailure,
+                format!("failed to read response body: {e}"),
+            )
+        })?;
+        let remaining = max_response_bytes.saturating_sub(body.len());
+        if chunk.len() > remaining {
+            return Err(Error::new(
+                Status::GenericFailure,
+                format!(
+                    "response body exceeds maxResponseBytes limit of {max_response_bytes} bytes"
+                ),
+            ));
+        }
+        body.extend_from_slice(&chunk);
+    }
 
     Ok(FetchResponse {
         status: status.as_u16(),

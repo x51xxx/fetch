@@ -1,7 +1,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const http = require('node:http')
-const { fetch } = require('../index.js')
+const { clearSession, fetch } = require('../index.js')
 
 function withServer(handler, run) {
   const server = http.createServer(handler)
@@ -85,6 +85,26 @@ test('two different sessions get isolated cookie jars', async () => {
   )
 })
 
+test('clearSession drops a session cookie jar', async () => {
+  await withServer(
+    (req, res) => {
+      if (req.url === '/set') {
+        res.writeHead(200, { 'set-cookie': 'sid=clear-me; Path=/' })
+        res.end('set')
+        return
+      }
+      res.end(req.headers.cookie || 'none')
+    },
+    async (base) => {
+      const session = `clear-session-${process.pid}`
+      await fetch(`${base}/set`, { session })
+      assert.equal(clearSession(session), 1)
+      const res = await fetch(`${base}/check`, { session })
+      assert.equal(await res.text(), 'none')
+    }
+  )
+})
+
 test('timeoutMs aborts a request to a slow server', async () => {
   await withServer(
     (req, res) => {
@@ -95,6 +115,29 @@ test('timeoutMs aborts a request to a slow server', async () => {
     },
     async (base) => {
       await assert.rejects(fetch(`${base}/slow`, { timeoutMs: 100 }))
+    }
+  )
+})
+
+test('maxResponseBytes rejects a response before it can grow unbounded', async () => {
+  await withServer(
+    (req, res) => {
+      res.end('x'.repeat(64))
+    },
+    async (base) => {
+      await assert.rejects(fetch(`${base}/large`, { maxResponseBytes: 16 }), /maxResponseBytes/)
+    }
+  )
+})
+
+test('case-only duplicate request headers are rejected', async () => {
+  await withServer(
+    (req, res) => res.end('should not be reached'),
+    async (base) => {
+      await assert.rejects(
+        fetch(`${base}/headers`, { headers: { 'x-request-id': 'one', 'X-Request-Id': 'two' } }),
+        /duplicate header name/
+      )
     }
   )
 })
@@ -115,4 +158,36 @@ test('an invalid httpVersion is rejected with a clear error', async () => {
 
 test('an invalid proxy URL is rejected with a clear error', async () => {
   await assert.rejects(fetch('https://example.com', { proxy: 'not a url' }))
+})
+
+test('platform overrides the declared OS in headers without changing impersonate', async () => {
+  await withServer(
+    (req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          userAgent: req.headers['user-agent'],
+          secChUaPlatform: req.headers['sec-ch-ua-platform'],
+        })
+      )
+    },
+    async (base) => {
+      const macos = await fetch(base, { impersonate: 'chrome_147' })
+      const linux = await fetch(base, { impersonate: 'chrome_147', platform: 'linux' })
+
+      const macosBody = await macos.json()
+      const linuxBody = await linux.json()
+
+      assert.match(macosBody.userAgent, /Macintosh/)
+      assert.match(linuxBody.userAgent, /X11; Linux/)
+      assert.match(linuxBody.secChUaPlatform, /Linux/)
+    }
+  )
+})
+
+test('an invalid platform is rejected with a clear error', async () => {
+  await assert.rejects(
+    fetch('https://example.com', { session: `bad-platform-${process.pid}`, platform: 'amiga' }),
+    /platform/
+  )
 })

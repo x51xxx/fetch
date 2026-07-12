@@ -589,5 +589,7 @@ if (!nativeBinding) {
 module.exports = nativeBinding
 module.exports.FetchHeaders = nativeBinding.FetchHeaders
 module.exports.FetchResponse = nativeBinding.FetchResponse
+module.exports.clearClientCache = nativeBinding.clearClientCache
+module.exports.clearSession = nativeBinding.clearSession
 module.exports.fetch = nativeBinding.fetch
 module.exports.listImpersonatePresets = nativeBinding.listImpersonatePresets

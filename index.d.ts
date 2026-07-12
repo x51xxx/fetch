@@ -20,6 +20,18 @@ export declare class FetchResponse {
   arrayBuffer(): Promise<Buffer>
 }
 
+/**
+ * Clears all cached clients. Intended for controlled shutdown or test/setup
+ * boundaries; it also drops all in-memory session cookies.
+ */
+export declare function clearClientCache(): number
+
+/**
+ * Removes every cached client (and its in-memory cookie jar) for a session.
+ * Existing in-flight requests continue with their already-cloned client.
+ */
+export declare function clearSession(session: string): number
+
 export declare function fetch(url: string, options?: FetchOptions | undefined | null): Promise<FetchResponse>
 
 export interface FetchOptions {
@@ -35,14 +47,27 @@ export interface FetchOptions {
    */
   impersonate?: string
   /**
+   * Overrides the platform `impersonate` declares in headers/User-Agent:
+   * "windows", "macos", "linux", "android", or "ios". Defaults to
+   * whatever `impersonate` resolves to (a curl-impersonate preset's own
+   * platform, or "macos" for a bare wreq-util profile name). Unlike
+   * `tlsOptions`, this does **not** diverge the TLS fingerprint — it only
+   * changes declared-platform headers (`sec-ch-ua-platform`, User-Agent),
+   * which is exactly what you want when e.g. running in a Linux container
+   * and need the declared platform to match the host's real TCP/IP stack
+   * instead of clashing with it. No effect when `impersonate` is
+   * "random"/"weighted_random". Client-level — see `session`.
+   */
+  platform?: string
+  /**
    * Proxy URL for this request, e.g. "http://user:pass@host:3128" or
    * "socks5://host:1080". Applied per request; does not affect which
    * client/connection-pool this call reuses.
    */
   proxy?: string
   /**
-   * Opaque session id. Calls sharing the same (`impersonate`, `session`,
-   * `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one underlying
+   * Opaque session id. Calls sharing the same (`impersonate`, `platform`,
+   * `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one underlying
    * client with a persistent cookie jar, so cookies carry across calls the
    * way they would in a real browser tab. Omit for stateless, cookie-less
    * calls (the default) — this avoids unrelated callers on the same
@@ -51,6 +76,8 @@ export interface FetchOptions {
   session?: string
   /** Overall request timeout in milliseconds. */
   timeoutMs?: number
+  /** Maximum buffered response body size in bytes. Defaults to 32 MiB. */
+  maxResponseBytes?: number
   /**
    * Minimum TLS version to offer during the handshake: "1.0", "1.1",
    * "1.2", or "1.3". Client-level — see `session`.
