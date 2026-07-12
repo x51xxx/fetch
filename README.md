@@ -354,6 +354,21 @@ hand-tuned in practice).
   `http` crate's status table, not necessarily the literal bytes on the wire
   (HTTP/2 doesn't have a wire reason phrase at all). Low-stakes, but don't
   treat it as a raw passthrough.
+- **TCP/IP-level fingerprint is NOT spoofed and reveals the real host OS.**
+  Verified against `https://networktest.proxywing.com:8443/api/all`, which
+  fingerprints the TCP handshake (TTL, window size, MSS, option order) the
+  same way p0f does, independent of anything TLS-related: switching
+  `impersonate` between `chrome_147`, `firefox_142`, and `safari_26` changed
+  `ja4`/`user_agent` correctly on every call, but `tcpip.os_guess` stayed
+  `"macOS / iOS"` and `tcpip.init_ttl`/`tcpip.tcp_options_order` stayed
+  identical across all three — because those come from the host kernel's TCP
+  stack, below anything a userspace TLS/HTTP library (this one included) can
+  reach. A detector that cross-checks TLS fingerprint against TCP/IP
+  fingerprint can catch a "Windows Chrome" TLS profile running over a
+  macOS/Linux TCP stack as inconsistent. If your product needs the TCP layer
+  to match too, that requires OS-level spoofing (e.g. running inside a VM/
+  container whose kernel matches the impersonated OS) — out of scope for
+  this library entirely.
 - This is a **from-scratch, purpose-built client**, not a general-purpose
   `fetch`/`undici` replacement. If you don't need TLS/HTTP2 fingerprint
   control, use something with a bigger surface area and less native-build
@@ -418,3 +433,11 @@ Other empirically confirmed facts (against `tls.peet.ws`, not mocked):
   cipher-suite/extension-hash segments of JA4 instead of the whole string if
   you're asserting fingerprint equality in tests (see
   `test/curl-impersonate-presets.test.js`).
+- Cross-checked against a second, independent fingerprinting service —
+  [ProxyWing's TLS Fingerprint Test](https://proxywing.com/tls-fingerprint)
+  (backend at `https://networktest.proxywing.com:8443/api/all`) — not just
+  `tls.peet.ws`: `chrome_147` produced the exact same JA4
+  (`t13d1516h2_8daaf6152771_d8a2da3f94cd`) on both services. This endpoint
+  also reports a passive TCP/IP fingerprint (p0f-style: TTL, window size,
+  option order → OS guess), which is how the TCP/IP limitation above was
+  found — see [Known limitations](#known-limitations).
