@@ -50,7 +50,10 @@ function printTable(rows) {
   }
 
   for (const sweep of Object.keys(bySweep)) {
-    const label = sweep === 'vus' ? 'CONCURRENCY SWEEP (constant-vus)' : 'THROUGHPUT SWEEP (constant-arrival-rate)'
+    const label =
+      sweep === 'vus'
+        ? 'CONCURRENCY SWEEP (constant-vus)'
+        : 'THROUGHPUT SWEEP (constant-arrival-rate)'
     console.log(`\n=== ${label} ===`)
     const grouped = {}
     for (const r of bySweep[sweep]) {
@@ -59,11 +62,16 @@ function printTable(rows) {
       grouped[key][r.client] = r
     }
     const header = [
-      'profile', sweep === 'vus' ? 'vus' : 'rate/s',
-      'native req/s', 'wreq req/s',
-      'native http p95', 'wreq http p95',
-      'native client p95', 'wreq client p95',
-      'native err%', 'wreq err%',
+      'profile',
+      sweep === 'vus' ? 'vus' : 'rate/s',
+      'native req/s',
+      'wreq req/s',
+      'native http p95',
+      'wreq http p95',
+      'native client p95',
+      'wreq client p95',
+      'native err%',
+      'wreq err%',
     ]
     console.log(header.join(' | '))
     const sortedKeys = Object.keys(grouped).sort((a, b) => {
@@ -75,21 +83,40 @@ function printTable(rows) {
       const [profile, param] = key.split('|')
       const n = grouped[key].native
       const w = grouped[key].wreq
-      console.log([
-        profile, param,
-        fmt(n?.reqPerSec, 0), fmt(w?.reqPerSec, 0),
-        fmt(n?.httpP95), fmt(w?.httpP95),
-        fmt(n?.upstreamP95), fmt(w?.upstreamP95),
-        fmt((n?.errorRate ?? 0) * 100), fmt((w?.errorRate ?? 0) * 100),
-      ].join(' | '))
+      console.log(
+        [
+          profile,
+          param,
+          fmt(n?.reqPerSec, 0),
+          fmt(w?.reqPerSec, 0),
+          fmt(n?.httpP95),
+          fmt(w?.httpP95),
+          fmt(n?.upstreamP95),
+          fmt(w?.upstreamP95),
+          fmt((n?.errorRate ?? 0) * 100),
+          fmt((w?.errorRate ?? 0) * 100),
+        ].join(' | ')
+      )
     }
   }
 }
 
 function writeCsv(rows) {
-  const header = 'sweep,profile,param,client,req_per_sec,http_avg_ms,http_p95_ms,client_avg_ms,client_p95_ms,error_rate\n'
+  const header =
+    'sweep,profile,param,client,req_per_sec,http_avg_ms,http_p95_ms,client_avg_ms,client_p95_ms,error_rate\n'
   const lines = rows.map((r) =>
-    [r.sweep, r.profile, r.param, r.client, r.reqPerSec, r.httpAvg, r.httpP95, r.upstreamAvg, r.upstreamP95, r.errorRate].join(',')
+    [
+      r.sweep,
+      r.profile,
+      r.param,
+      r.client,
+      r.reqPerSec,
+      r.httpAvg,
+      r.httpP95,
+      r.upstreamAvg,
+      r.upstreamP95,
+      r.errorRate,
+    ].join(',')
   )
   fs.writeFileSync(path.join(RESULTS_DIR, 'summary.csv'), header + lines.join('\n') + '\n')
 }
@@ -102,4 +129,6 @@ if (rows.length === 0) {
 printTable(rows)
 writeCsv(rows)
 console.log(`\nCSV written to ${path.join(RESULTS_DIR, 'summary.csv')}`)
-console.log('Note: "client p95" = x-upstream-ms header (gateway\'s own outbound call, isolates the library from proxy/network overhead). "http p95" = k6\'s full k6->gateway->upstream->back round trip.')
+console.log(
+  'Note: "client p95" = x-upstream-ms header (gateway\'s own outbound call, isolates the library from proxy/network overhead). "http p95" = k6\'s full k6->gateway->upstream->back round trip.'
+)

@@ -12,7 +12,7 @@ async function run() {
     console.log(JSON.stringify({ ok: true, status: res.status, elapsed }))
   } catch (err) {
     const elapsed = performance.now() - start
-    console.log(JSON.stringify({ ok: false, error: String(err && err.message || err), elapsed }))
+    console.log(JSON.stringify({ ok: false, error: String((err && err.message) || err), elapsed }))
   }
 }
 run()

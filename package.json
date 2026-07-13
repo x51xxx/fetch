@@ -47,19 +47,26 @@
     "build:debug": "napi build --platform --js binding.js --dts binding.d.ts",
     "test": "node --test test/*.test.js",
     "artifacts": "napi artifacts",
-    "prepublishOnly": "napi pre-publish -t npm"
+    "prepublishOnly": "napi pre-publish -t npm",
+    "format": "prettier --write . && cargo fmt",
+    "format:check": "prettier --check . && cargo fmt -- --check",
+    "lint": "eslint . && cargo clippy --all-targets --all-features -- -D warnings"
   },
   "author": "Taras Trishchuk",
   "license": "MIT",
   "packageManager": "pnpm@10.26.2",
   "devDependencies": {
-    "@napi-rs/cli": "^3.7.2"
+    "@eslint/js": "^10.0.1",
+    "@napi-rs/cli": "^3.7.2",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.5"
   },
   "optionalDependencies": {
     "@trishchuk/fetch-darwin-arm64": "1.0.0",
     "@trishchuk/fetch-darwin-x64": "1.0.0",
-    "@trishchuk/fetch-linux-x64-gnu": "1.0.0",
     "@trishchuk/fetch-linux-arm64-gnu": "1.0.0",
+    "@trishchuk/fetch-linux-x64-gnu": "1.0.0",
     "@trishchuk/fetch-win32-x64-msvc": "1.0.0"
   }
 }

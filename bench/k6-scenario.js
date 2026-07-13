@@ -12,20 +12,21 @@ const RATE = Number(__ENV.RATE || 50) // requests/sec for constant-arrival-rate
 const PRE_ALLOCATED_VUS = Number(__ENV.PRE_ALLOCATED_VUS || Math.max(VUS, 20))
 const MAX_VUS = Number(__ENV.MAX_VUS || PRE_ALLOCATED_VUS * 3)
 
-const scenario = EXECUTOR === 'constant-arrival-rate'
-  ? {
-      executor: 'constant-arrival-rate',
-      rate: RATE,
-      timeUnit: '1s',
-      duration: DURATION,
-      preAllocatedVUs: PRE_ALLOCATED_VUS,
-      maxVUs: MAX_VUS,
-    }
-  : {
-      executor: 'constant-vus',
-      vus: VUS,
-      duration: DURATION,
-    }
+const scenario =
+  EXECUTOR === 'constant-arrival-rate'
+    ? {
+        executor: 'constant-arrival-rate',
+        rate: RATE,
+        timeUnit: '1s',
+        duration: DURATION,
+        preAllocatedVUs: PRE_ALLOCATED_VUS,
+        maxVUs: MAX_VUS,
+      }
+    : {
+        executor: 'constant-vus',
+        vus: VUS,
+        duration: DURATION,
+      }
 
 export const options = {
   scenarios: { main: scenario },

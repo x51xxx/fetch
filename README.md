@@ -12,7 +12,7 @@ outbound requests whose ClientHello (JA3/JA4) and HTTP/2 SETTINGS/priority
 frames (Akamai hash) match a real browser, not just an HTTP client that
 happens to have a `fetch()`-shaped API. If you don't need fingerprint control,
 `undici`/native `fetch` will be faster to build and easier to deploy (no Rust
-toolchain, no BoringSSL). Use this when the *shape of your TLS handshake* is
+toolchain, no BoringSSL). Use this when the _shape of your TLS handshake_ is
 part of what you're testing or evading detection on.
 
 It follows the WHATWG `fetch(input, init)` shape: `input` can be a URL string,
@@ -57,6 +57,11 @@ pnpm run build:debug
 # https://tls.peet.ws/api/all fingerprint-echo service and need network
 # access.
 pnpm test
+
+# Format (Prettier for JS/MD/YAML, `cargo fmt` for Rust) and lint (ESLint +
+# `cargo clippy -D warnings`). CI runs the `:check`/non-writing form of both.
+pnpm run format
+pnpm run lint
 ```
 
 Both build commands emit a platform-specific binary (e.g.
@@ -74,8 +79,8 @@ const { fetch } = require('@trishchuk/fetch')
 async function main() {
   const res = await fetch('https://example.com')
 
-  console.log(res.status)               // 200
-  console.log(res.ok)                   // true (status in 200..299)
+  console.log(res.status) // 200
+  console.log(res.ok) // true (status in 200..299)
   console.log(res.headers.get('content-type'))
   console.log(await res.text())
 }
@@ -258,7 +263,7 @@ you set diverges the fingerprint from the pure `impersonate` profile by
 definition.** Unset fields keep the preset's values (confirmed empirically —
 overriding only `cipherList` leaves curves, the HTTP/2 Akamai hash, and the
 User-Agent exactly as the base profile's; only the cipher-related JA3/JA4
-segments change), but every field you *do* set is a byte your traffic no
+segments change), but every field you _do_ set is a byte your traffic no
 longer shares with the real browser you're impersonating. Only reach for this
 when you need bytes the preset doesn't offer.
 
@@ -299,21 +304,21 @@ package's fingerprint/transport options. When both `input` (a `Request`) and
 
 ### `FetchInit`
 
-| Field | Type | Default | Meaning |
-|---|---|---|---|
-| `method` | `string` | `"GET"` | HTTP method. |
-| `headers` | `Headers \| [string,string][] \| Record<string,string>` | none | Request headers as a `Headers` instance, an array of pairs, or a plain object. Case-insensitive duplicate names are combined with `", "` the way `Headers` does. |
-| `body` | `string \| Uint8Array \| ArrayBuffer \| ArrayBufferView \| URLSearchParams \| Blob` | none | Request body. `URLSearchParams` and `Blob` also set a default `Content-Type` (form-urlencoded / the blob's `type`) unless you set one. **No `FormData`/multipart or streams** — see [Known limitations](#known-limitations). |
-| `impersonate` | `string` | `"chrome_147"` | Fingerprint to emulate: a native `wreq-util` profile name (`"chrome_147"`, `"safari_26"`, `"firefox_142"`), a curl-impersonate preset name (`"chrome116"`, `"ff109"`, `"safari15_5"` — see `listImpersonatePresets()`), or `"random"` / `"weighted_random"`. |
-| `platform` | `string` | profile default | Declared OS for User-Agent/client-hint headers: `"windows"`, `"macos"`, `"linux"`, `"android"`, or `"ios"`. Client-level; has no effect for random profiles. |
-| `proxy` | `string` | none | Proxy URL for this request (`http://`, `https://`, or `socks5://`, with optional userinfo). Applied per request; does not affect client-cache reuse. |
-| `session` | `string` | none (stateless) | Opaque session id. Calls with the same (`session`, `impersonate`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one client and its cookie jar. Omitted = no cookie jar, never shared with anyone. |
-| `timeoutMs` | `number` | none (no timeout) | Overall request timeout in milliseconds. |
-| `maxResponseBytes` | `number` | `33,554,432` (32 MiB) | Hard limit for the fully buffered response body. The request rejects if the decoded body exceeds it. |
-| `tlsMinVersion` | `string` | profile default | Minimum TLS version to offer: `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"`. Client-level (part of the cache key). |
-| `tlsMaxVersion` | `string` | profile default | Maximum TLS version to offer. Client-level. |
-| `httpVersion` | `string` | ALPN-negotiated | Force `"http1"` or `"http2"` instead of letting ALPN pick. Client-level. |
-| `tlsOptions` | `TlsOptionsOverride` | none | Raw ClientHello overrides layered on the `impersonate` profile. **Diverges the fingerprint** — see [Use case 6](#6-low-level-tls-override-escape-hatch-tlsoptions). Client-level. |
+| Field              | Type                                                                                | Default               | Meaning                                                                                                                                                                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `method`           | `string`                                                                            | `"GET"`               | HTTP method.                                                                                                                                                                                                                                                 |
+| `headers`          | `Headers \| [string,string][] \| Record<string,string>`                             | none                  | Request headers as a `Headers` instance, an array of pairs, or a plain object. Case-insensitive duplicate names are combined with `", "` the way `Headers` does.                                                                                             |
+| `body`             | `string \| Uint8Array \| ArrayBuffer \| ArrayBufferView \| URLSearchParams \| Blob` | none                  | Request body. `URLSearchParams` and `Blob` also set a default `Content-Type` (form-urlencoded / the blob's `type`) unless you set one. **No `FormData`/multipart or streams** — see [Known limitations](#known-limitations).                                 |
+| `impersonate`      | `string`                                                                            | `"chrome_147"`        | Fingerprint to emulate: a native `wreq-util` profile name (`"chrome_147"`, `"safari_26"`, `"firefox_142"`), a curl-impersonate preset name (`"chrome116"`, `"ff109"`, `"safari15_5"` — see `listImpersonatePresets()`), or `"random"` / `"weighted_random"`. |
+| `platform`         | `string`                                                                            | profile default       | Declared OS for User-Agent/client-hint headers: `"windows"`, `"macos"`, `"linux"`, `"android"`, or `"ios"`. Client-level; has no effect for random profiles.                                                                                                 |
+| `proxy`            | `string`                                                                            | none                  | Proxy URL for this request (`http://`, `https://`, or `socks5://`, with optional userinfo). Applied per request; does not affect client-cache reuse.                                                                                                         |
+| `session`          | `string`                                                                            | none (stateless)      | Opaque session id. Calls with the same (`session`, `impersonate`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one client and its cookie jar. Omitted = no cookie jar, never shared with anyone.                                                   |
+| `timeoutMs`        | `number`                                                                            | none (no timeout)     | Overall request timeout in milliseconds.                                                                                                                                                                                                                     |
+| `maxResponseBytes` | `number`                                                                            | `33,554,432` (32 MiB) | Hard limit for the fully buffered response body. The request rejects if the decoded body exceeds it.                                                                                                                                                         |
+| `tlsMinVersion`    | `string`                                                                            | profile default       | Minimum TLS version to offer: `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"`. Client-level (part of the cache key).                                                                                                                                                      |
+| `tlsMaxVersion`    | `string`                                                                            | profile default       | Maximum TLS version to offer. Client-level.                                                                                                                                                                                                                  |
+| `httpVersion`      | `string`                                                                            | ALPN-negotiated       | Force `"http1"` or `"http2"` instead of letting ALPN pick. Client-level.                                                                                                                                                                                     |
+| `tlsOptions`       | `TlsOptionsOverride`                                                                | none                  | Raw ClientHello overrides layered on the `impersonate` profile. **Diverges the fingerprint** — see [Use case 6](#6-low-level-tls-override-escape-hatch-tlsoptions). Client-level.                                                                            |
 
 `impersonate`, `platform`, `session`, `tlsMinVersion`, `tlsMaxVersion`,
 `httpVersion`, and `tlsOptions` are all **client-level**: they determine which cached
@@ -323,21 +328,21 @@ affect caching.
 
 ### `FetchResponse`
 
-| Member | Type | Meaning |
-|---|---|---|
-| `status` | `number` (readonly) | HTTP status code. |
-| `statusText` | `string` (readonly) | Canonical reason phrase for `status` from the `http` crate's table — not necessarily the literal wire reason phrase (HTTP/2 responses have none on the wire at all). |
-| `ok` | `boolean` (readonly) | `true` iff `status` is in `200..299`. |
-| `url` | `string` (readonly) | Final URL after following redirects. |
-| `redirected` | `boolean` (readonly) | `true` iff the final URL differs from the requested one. |
-| `bodyUsed` | `boolean` (readonly) | `true` once any body accessor has run. Advisory — because the body is buffered, accessors are re-readable and don't throw on a second call (see below). |
-| `headers` | `Headers` (getter) | Response headers as a WHATWG `Headers` (iterable, `forEach`, `getSetCookie`, case-insensitive `get`/`has`). |
-| `rawHeaders` | `FetchHeaders` (getter) | The native header collection, preserving the server's **original casing and order** (which WHATWG `Headers` lower-cases and sorts away — kept for fingerprint work). See below. |
-| `text()` | `Promise<string>` | Body decoded as UTF-8 (lossy, like WHATWG — invalid bytes become U+FFFD). |
-| `json()` | `Promise<any>` | Body parsed as JSON. Rejects on invalid JSON. |
-| `bytes()` | `Promise<Uint8Array>` | Raw body bytes as a `Uint8Array`. |
-| `blob()` | `Promise<Blob>` | Body as a `Blob`, typed from the response `Content-Type`. |
-| `arrayBuffer()` | `Promise<ArrayBuffer>` | Raw body bytes as a real Web `ArrayBuffer`. |
+| Member          | Type                    | Meaning                                                                                                                                                                         |
+| --------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`        | `number` (readonly)     | HTTP status code.                                                                                                                                                               |
+| `statusText`    | `string` (readonly)     | Canonical reason phrase for `status` from the `http` crate's table — not necessarily the literal wire reason phrase (HTTP/2 responses have none on the wire at all).            |
+| `ok`            | `boolean` (readonly)    | `true` iff `status` is in `200..299`.                                                                                                                                           |
+| `url`           | `string` (readonly)     | Final URL after following redirects.                                                                                                                                            |
+| `redirected`    | `boolean` (readonly)    | `true` iff the final URL differs from the requested one.                                                                                                                        |
+| `bodyUsed`      | `boolean` (readonly)    | `true` once any body accessor has run. Advisory — because the body is buffered, accessors are re-readable and don't throw on a second call (see below).                         |
+| `headers`       | `Headers` (getter)      | Response headers as a WHATWG `Headers` (iterable, `forEach`, `getSetCookie`, case-insensitive `get`/`has`).                                                                     |
+| `rawHeaders`    | `FetchHeaders` (getter) | The native header collection, preserving the server's **original casing and order** (which WHATWG `Headers` lower-cases and sorts away — kept for fingerprint work). See below. |
+| `text()`        | `Promise<string>`       | Body decoded as UTF-8 (lossy, like WHATWG — invalid bytes become U+FFFD).                                                                                                       |
+| `json()`        | `Promise<any>`          | Body parsed as JSON. Rejects on invalid JSON.                                                                                                                                   |
+| `bytes()`       | `Promise<Uint8Array>`   | Raw body bytes as a `Uint8Array`.                                                                                                                                               |
+| `blob()`        | `Promise<Blob>`         | Body as a `Blob`, typed from the response `Content-Type`.                                                                                                                       |
+| `arrayBuffer()` | `Promise<ArrayBuffer>`  | Raw body bytes as a real Web `ArrayBuffer`.                                                                                                                                     |
 
 All body accessors are **async** — the response body is fully read before
 `fetch()` resolves, but the accessors return `Promise`s to keep the WHATWG
@@ -358,13 +363,13 @@ client and is intended for controlled process/test boundaries.
 Not a plain `Record<string, string>` — a small case-insensitive header
 collection, similar in spirit to the Fetch API's `Headers`:
 
-| Method | Returns | Notes |
-|---|---|---|
-| `get(name)` | `string \| null` | Case-insensitive. If multiple headers share a name, values are joined with `", "`. |
-| `has(name)` | `boolean` | Case-insensitive. |
-| `entries()` | `Array<Array<string>>` | All header pairs (`[name, value]`), original case, in response order. |
-| `keys()` | `string[]` | All header names, original case, may contain duplicates. |
-| `values()` | `string[]` | All header values, in the same order as `keys()`. |
+| Method      | Returns                | Notes                                                                              |
+| ----------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| `get(name)` | `string \| null`       | Case-insensitive. If multiple headers share a name, values are joined with `", "`. |
+| `has(name)` | `boolean`              | Case-insensitive.                                                                  |
+| `entries()` | `Array<Array<string>>` | All header pairs (`[name, value]`), original case, in response order.              |
+| `keys()`    | `string[]`             | All header names, original case, may contain duplicates.                           |
+| `values()`  | `string[]`             | All header values, in the same order as `keys()`.                                  |
 
 ### `listImpersonatePresets() => ImpersonatePresetInfo[]`
 
@@ -372,23 +377,23 @@ Lists all 19 curl-impersonate preset names accepted by `impersonate`.
 
 ### `ImpersonatePresetInfo`
 
-| Field | Type | Meaning |
-|---|---|---|
-| `name` | `string` | curl-impersonate preset name, e.g. `"chrome116"`. |
-| `profile` | `string` | The underlying `wreq-util` profile this preset resolves to, e.g. `"chrome_116"`. |
-| `platform` | `string` | Platform the profile emulates, e.g. `"windows"`, `"macos"`, `"android"`. |
-| `browserVersion` | `string` | Browser version curl-impersonate pinned this preset to. |
-| `exact` | `boolean` | `false` means curl-impersonate's pinned version predates `wreq-util`'s oldest profile for that browser family, so `profile` is a nearest-neighbor approximation, not a byte-exact fingerprint match. |
+| Field            | Type      | Meaning                                                                                                                                                                                              |
+| ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`           | `string`  | curl-impersonate preset name, e.g. `"chrome116"`.                                                                                                                                                    |
+| `profile`        | `string`  | The underlying `wreq-util` profile this preset resolves to, e.g. `"chrome_116"`.                                                                                                                     |
+| `platform`       | `string`  | Platform the profile emulates, e.g. `"windows"`, `"macos"`, `"android"`.                                                                                                                             |
+| `browserVersion` | `string`  | Browser version curl-impersonate pinned this preset to.                                                                                                                                              |
+| `exact`          | `boolean` | `false` means curl-impersonate's pinned version predates `wreq-util`'s oldest profile for that browser family, so `profile` is a nearest-neighbor approximation, not a byte-exact fingerprint match. |
 
 ### `TlsOptionsOverride`
 
-| Field | Type | Meaning |
-|---|---|---|
-| `cipherList` | `string` | OpenSSL-format cipher list (same string curl-impersonate's wrapper scripts pass to `--ciphers`). |
-| `curvesList` | `string` | OpenSSL-format supported-curves list (curl's `--curves`). |
-| `sigalgsList` | `string` | OpenSSL-format signature-algorithms list. |
-| `permuteExtensions` | `boolean` | Randomize ClientHello extension order (curl's `--tls-permute-extensions`). |
-| `sessionTicket` | `boolean` | Whether to offer TLS session tickets (RFC 5077). |
+| Field               | Type      | Meaning                                                                                          |
+| ------------------- | --------- | ------------------------------------------------------------------------------------------------ |
+| `cipherList`        | `string`  | OpenSSL-format cipher list (same string curl-impersonate's wrapper scripts pass to `--ciphers`). |
+| `curvesList`        | `string`  | OpenSSL-format supported-curves list (curl's `--curves`).                                        |
+| `sigalgsList`       | `string`  | OpenSSL-format signature-algorithms list.                                                        |
+| `permuteExtensions` | `boolean` | Randomize ClientHello extension order (curl's `--tls-permute-extensions`).                       |
+| `sessionTicket`     | `boolean` | Whether to offer TLS session tickets (RFC 5077).                                                 |
 
 Only these five fields are exposed — not the full ~25-field BoringSSL option
 set (ECH GREASE, delegated credentials, PSK, key shares, etc. are
@@ -417,7 +422,7 @@ hand-tuned in practice).
   deadline in the meantime.
 - **`tlsOptions` genuinely diverges the fingerprint.** It composes with
   `impersonate` rather than clobbering it (unset fields keep the profile's
-  values), but every field you *do* set is, by construction, no longer what
+  values), but every field you _do_ set is, by construction, no longer what
   the impersonated browser would send. Don't reach for it unless you've
   confirmed you need it.
 - **No cookie access outside sessions.** Cookies are only observable as a side
@@ -445,7 +450,7 @@ hand-tuned in practice).
   macOS/Linux TCP stack as inconsistent.
 
   Fixing this requires the TCP/IP layer to actually match, which means
-  running on a host whose *kernel* is the OS you're declaring — not
+  running on a host whose _kernel_ is the OS you're declaring — not
   something a userspace library can do, and not as simple as "run it in a
   container" either. A container shares its host's kernel rather than
   bringing its own, so it can only make you look like whatever OS is
@@ -455,14 +460,15 @@ hand-tuned in practice).
   fingerprinting service — and that verification **caught a real gap**:
   on Docker Desktop for Mac, the container's egress traffic is NATed
   through the macOS host's own network stack, so `tcpip.os_guess` still
-  said `"macOS / iOS"` from *inside* a genuinely-Linux container (`uname
-  -a` correctly said Linux; the wire-level TCP fingerprint didn't care).
+  said `"macOS / iOS"` from _inside_ a genuinely-Linux container (`uname
+-a` correctly said Linux; the wire-level TCP fingerprint didn't care).
   This setup only buys real coherence on an actual Linux Docker host
   (bare metal or a cloud VM) — verify there before relying on it. For
   non-Linux targets (declaring Windows/macOS TCP/IP), the only remaining
   options are running on real hardware/VMs of that OS, or a privileged
   raw-socket packet rewriter that intercepts and edits outbound SYN
   packets — both outside this library's scope.
+
 - This is a **from-scratch, purpose-built client**, not a general-purpose
   `fetch`/`undici` replacement. If you don't need TLS/HTTP2 fingerprint
   control, use something with a bigger surface area and less native-build
@@ -495,7 +501,7 @@ load-bearing for correctness:
   clients.
 - **Cookies are a property of the client, not of a request either.** A
   cookie jar is attached only when `session` is set (`cookie_store(key.session.is_some())`).
-  Two calls only share cookies if they resolve to the *same* cache key —
+  Two calls only share cookies if they resolve to the _same_ cache key —
   which is why `session` alone isn't enough; `impersonate`/TLS/HTTP-version
   have to match too, otherwise you'd silently get a different client with an
   empty jar.
@@ -505,7 +511,7 @@ load-bearing for correctness:
   re-randomizing every request.
 
 `tlsOptions` overrides are applied by mutating the resolved `Emulation`'s own
-`tls_options` struct field-by-field *before* it's handed to the client
+`tls_options` struct field-by-field _before_ it's handed to the client
 builder, rather than replacing the whole TLS config wholesale — that's what
 lets an override of, say, only `cipherList` leave curves, HTTP/2 settings,
 and headers untouched. This was verified empirically against
@@ -522,7 +528,7 @@ Other empirically confirmed facts (against `tls.peet.ws`, not mocked):
   `Accept`, and `sec-fetch-*` headers matching curl-impersonate's actual
   `curl_chrome116` wrapper script nearly byte-for-byte.
 - JA4's first segment (e.g. `t13d1516h2` vs `t13d1517h2`) can flip between a
-  fresh TLS handshake and a session-resumed one on the *same* client. This is
+  fresh TLS handshake and a session-resumed one on the _same_ client. This is
   expected BoringSSL/browser session-ticket behavior, not a bug — compare the
   cipher-suite/extension-hash segments of JA4 instead of the whole string if
   you're asserting fingerprint equality in tests (see

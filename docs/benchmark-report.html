@@ -11,15 +11,15 @@
     --muted: #8992a3;
     --grid: #e3e6ec;
     --baseline: #c7ccd6;
-    --border: rgba(20, 24, 31, 0.10);
+    --border: rgba(20, 24, 31, 0.1);
     --native: #008300;
     --wreq: #cb5a1e;
     --critical: #d03b3b;
     --critical-wash: rgba(208, 59, 59, 0.09);
     --warning: #b8860b;
     --shadow: 0 1px 2px rgba(20, 24, 31, 0.04), 0 8px 24px -12px rgba(20, 24, 31, 0.12);
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -31,7 +31,7 @@
       --muted: #7d8494;
       --grid: #262b35;
       --baseline: #383f4c;
-      --border: rgba(255, 255, 255, 0.10);
+      --border: rgba(255, 255, 255, 0.1);
       --native: #2fb32f;
       --wreq: #e2803f;
       --critical: #e66767;
@@ -40,21 +40,49 @@
       --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
     }
   }
-  :root[data-theme="dark"] {
-    --page: #0c0e13; --surface: #14171e; --surface-2: #1b1f28; --ink: #f2f4f8; --ink-2: #c1c7d1;
-    --muted: #7d8494; --grid: #262b35; --baseline: #383f4c; --border: rgba(255, 255, 255, 0.10);
-    --native: #2fb32f; --wreq: #e2803f; --critical: #e66767; --critical-wash: rgba(230, 103, 103, 0.12); --warning: #e0ac2c;
+  :root[data-theme='dark'] {
+    --page: #0c0e13;
+    --surface: #14171e;
+    --surface-2: #1b1f28;
+    --ink: #f2f4f8;
+    --ink-2: #c1c7d1;
+    --muted: #7d8494;
+    --grid: #262b35;
+    --baseline: #383f4c;
+    --border: rgba(255, 255, 255, 0.1);
+    --native: #2fb32f;
+    --wreq: #e2803f;
+    --critical: #e66767;
+    --critical-wash: rgba(230, 103, 103, 0.12);
+    --warning: #e0ac2c;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
   }
-  :root[data-theme="light"] {
-    --page: #f5f6f8; --surface: #ffffff; --surface-2: #eef0f4; --ink: #14181f; --ink-2: #4b5563;
-    --muted: #8992a3; --grid: #e3e6ec; --baseline: #c7ccd6; --border: rgba(20, 24, 31, 0.10);
-    --native: #008300; --wreq: #cb5a1e; --critical: #d03b3b; --critical-wash: rgba(208, 59, 59, 0.09); --warning: #b8860b;
+  :root[data-theme='light'] {
+    --page: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #eef0f4;
+    --ink: #14181f;
+    --ink-2: #4b5563;
+    --muted: #8992a3;
+    --grid: #e3e6ec;
+    --baseline: #c7ccd6;
+    --border: rgba(20, 24, 31, 0.1);
+    --native: #008300;
+    --wreq: #cb5a1e;
+    --critical: #d03b3b;
+    --critical-wash: rgba(208, 59, 59, 0.09);
+    --warning: #b8860b;
     --shadow: 0 1px 2px rgba(20, 24, 31, 0.04), 0 8px 24px -12px rgba(20, 24, 31, 0.12);
   }
 
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
   body {
     background: var(--page);
     color: var(--ink);
@@ -62,9 +90,16 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
-  ::selection { background: var(--wreq); color: #fff; }
+  ::selection {
+    background: var(--wreq);
+    color: #fff;
+  }
 
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 96px; }
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 24px 96px;
+  }
 
   .eyebrow {
     font-family: var(--mono);
@@ -77,7 +112,13 @@
     gap: 10px;
     margin-bottom: 14px;
   }
-  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--wreq); flex: none; }
+  .eyebrow .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wreq);
+    flex: none;
+  }
 
   h1 {
     font-size: clamp(28px, 4vw, 40px);
@@ -87,7 +128,9 @@
     text-wrap: balance;
     max-width: 26ch;
   }
-  h1 .accent { color: var(--wreq); }
+  h1 .accent {
+    color: var(--wreq);
+  }
 
   .lede {
     font-size: 16px;
@@ -95,18 +138,54 @@
     max-width: 62ch;
     margin: 0 0 32px;
   }
-  .lede code, p code, li code { font-family: var(--mono); font-size: 0.92em; background: var(--surface-2); padding: 0.1em 0.4em; border-radius: 4px; }
+  .lede code,
+  p code,
+  li code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: var(--surface-2);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+  }
 
-  section { margin-top: 56px; }
-  section:first-of-type { margin-top: 0; }
+  section {
+    margin-top: 56px;
+  }
+  section:first-of-type {
+    margin-top: 0;
+  }
 
-  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
-  .section-head h2 { font-size: 20px; margin: 0; letter-spacing: -0.005em; }
-  .section-head .note { font-size: 13px; color: var(--muted); font-family: var(--mono); }
-  .section-desc { font-size: 14.5px; color: var(--ink-2); max-width: 72ch; margin: -8px 0 20px; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .section-head h2 {
+    font-size: 20px;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .section-head .note {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .section-desc {
+    font-size: 14.5px;
+    color: var(--ink-2);
+    max-width: 72ch;
+    margin: -8px 0 20px;
+  }
 
   /* stat tiles */
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
   .tile {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -114,21 +193,68 @@
     padding: 18px 20px;
     box-shadow: var(--shadow);
   }
-  .tile .label { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
-  .tile .value { font-size: 26px; font-weight: 650; letter-spacing: -0.01em; }
-  .tile .value .unit { font-size: 14px; font-weight: 500; color: var(--ink-2); margin-left: 2px; }
-  .tile .sub { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; font-family: var(--mono); }
-  .tile.crit { border-color: color-mix(in srgb, var(--critical) 35%, var(--border)); background: linear-gradient(var(--critical-wash), var(--critical-wash)), var(--surface); }
-  .tile.crit .value { color: var(--critical); }
+  .tile .label {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .tile .value {
+    font-size: 26px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+  .tile .value .unit {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-2);
+    margin-left: 2px;
+  }
+  .tile .sub {
+    font-size: 12.5px;
+    color: var(--ink-2);
+    margin-top: 6px;
+    font-family: var(--mono);
+  }
+  .tile.crit {
+    border-color: color-mix(in srgb, var(--critical) 35%, var(--border));
+    background: linear-gradient(var(--critical-wash), var(--critical-wash)), var(--surface);
+  }
+  .tile.crit .value {
+    color: var(--critical);
+  }
 
   /* legend */
-  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin-bottom: 4px; }
-  .legend .item { display: flex; align-items: center; gap: 7px; }
-  .legend .swatch { width: 16px; height: 2px; border-radius: 1px; flex: none; }
-  .legend .swatch.dashed { background: none; border-top: 2px dashed currentColor; height: 0; }
+  .legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--ink-2);
+    margin-bottom: 4px;
+  }
+  .legend .item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .legend .swatch {
+    width: 16px;
+    height: 2px;
+    border-radius: 1px;
+    flex: none;
+  }
+  .legend .swatch.dashed {
+    background: none;
+    border-top: 2px dashed currentColor;
+    height: 0;
+  }
 
   /* chart grid */
-  .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 14px;
+  }
   .panel {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -137,40 +263,114 @@
     box-shadow: var(--shadow);
     position: relative;
   }
-  .panel.featured { border-color: color-mix(in srgb, var(--critical) 30%, var(--border)); }
-  .panel .ptitle { font-size: 13.5px; font-weight: 600; margin: 0 0 1px; }
-  .panel .psub { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
-  .panel svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .panel.featured {
+    border-color: color-mix(in srgb, var(--critical) 30%, var(--border));
+  }
+  .panel .ptitle {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin: 0 0 1px;
+  }
+  .panel .psub {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .panel svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+  }
   .panel .badge {
-    position: absolute; top: 14px; right: 14px;
-    font-family: var(--mono); font-size: 10.5px; font-weight: 600;
-    color: var(--critical); background: var(--critical-wash);
-    padding: 2px 7px; border-radius: 100px;
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--critical);
+    background: var(--critical-wash);
+    padding: 2px 7px;
+    border-radius: 100px;
   }
 
-  .axis-label { font-size: 9.5px; fill: var(--muted); font-family: var(--mono); }
-  .grid-line { stroke: var(--grid); stroke-width: 1; }
-  .base-line { stroke: var(--baseline); stroke-width: 1; }
-  .ref-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
-  .end-label { font-size: 10.5px; font-weight: 600; font-family: var(--mono); }
+  .axis-label {
+    font-size: 9.5px;
+    fill: var(--muted);
+    font-family: var(--mono);
+  }
+  .grid-line {
+    stroke: var(--grid);
+    stroke-width: 1;
+  }
+  .base-line {
+    stroke: var(--baseline);
+    stroke-width: 1;
+  }
+  .ref-line {
+    stroke: var(--muted);
+    stroke-width: 1;
+    stroke-dasharray: 2 3;
+  }
+  .end-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: var(--mono);
+  }
 
   /* tooltip */
   .tooltip {
-    position: absolute; pointer-events: none; z-index: 20;
-    background: var(--ink); color: var(--page);
-    border-radius: 8px; padding: 8px 10px; font-size: 12px;
-    box-shadow: var(--shadow); opacity: 0; transform: translate(-50%, -100%);
-    transition: opacity 0.08s ease; white-space: nowrap;
+    position: absolute;
+    pointer-events: none;
+    z-index: 20;
+    background: var(--ink);
+    color: var(--page);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translate(-50%, -100%);
+    transition: opacity 0.08s ease;
+    white-space: nowrap;
     font-family: var(--mono);
   }
-  .tooltip.show { opacity: 1; }
-  .tooltip .row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-  .tooltip .row:first-child { margin-top: 0; }
-  .tooltip .key { width: 10px; height: 2px; border-radius: 1px; flex: none; }
-  .tooltip .val { font-weight: 700; margin-left: auto; padding-left: 10px; }
-  .tooltip .x { color: var(--muted); font-weight: 400; margin-bottom: 3px; }
+  .tooltip.show {
+    opacity: 1;
+  }
+  .tooltip .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .tooltip .row:first-child {
+    margin-top: 0;
+  }
+  .tooltip .key {
+    width: 10px;
+    height: 2px;
+    border-radius: 1px;
+    flex: none;
+  }
+  .tooltip .val {
+    font-weight: 700;
+    margin-left: auto;
+    padding-left: 10px;
+  }
+  .tooltip .x {
+    color: var(--muted);
+    font-weight: 400;
+    margin-bottom: 3px;
+  }
 
-  .crosshair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 2; opacity: 0; }
+  .crosshair {
+    stroke: var(--muted);
+    stroke-width: 1;
+    stroke-dasharray: 2 2;
+    opacity: 0;
+  }
 
   /* methodology */
   .callout {
@@ -183,44 +383,145 @@
     color: var(--ink-2);
     margin-bottom: 16px;
   }
-  .callout strong { color: var(--ink); }
-  .arch-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12.5px; margin: 18px 0; }
-  .arch-steps .box { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 8px 12px; }
-  .arch-steps .box.native { border-color: color-mix(in srgb, var(--native) 40%, var(--border)); }
-  .arch-steps .box.wreq { border-color: color-mix(in srgb, var(--wreq) 40%, var(--border)); }
-  .arch-steps .arrow { color: var(--muted); }
+  .callout strong {
+    color: var(--ink);
+  }
+  .arch-steps {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    margin: 18px 0;
+  }
+  .arch-steps .box {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+  .arch-steps .box.native {
+    border-color: color-mix(in srgb, var(--native) 40%, var(--border));
+  }
+  .arch-steps .box.wreq {
+    border-color: color-mix(in srgb, var(--wreq) 40%, var(--border));
+  }
+  .arch-steps .arrow {
+    color: var(--muted);
+  }
 
   /* table */
-  .table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
-  table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-family: var(--mono); min-width: 900px; }
-  thead th { position: sticky; top: 0; background: var(--surface-2); text-align: right; padding: 9px 12px; font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--border); white-space: nowrap; }
-  thead th:first-child, thead th:nth-child(2), thead th:nth-child(4) { text-align: left; }
-  tbody td { padding: 7px 12px; text-align: right; font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--grid); white-space: nowrap; }
-  tbody td:first-child, tbody td:nth-child(2), tbody td:nth-child(4) { text-align: left; }
-  tbody tr:last-child td { border-bottom: none; }
-  tbody tr:hover { background: var(--surface-2); }
-  .client-tag { font-weight: 700; }
-  .client-tag.native { color: var(--native); }
-  .client-tag.wreq { color: var(--wreq); }
-  .err-cell.has-err { color: var(--critical); font-weight: 700; }
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+    font-family: var(--mono);
+    min-width: 900px;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--surface-2);
+    text-align: right;
+    padding: 9px 12px;
+    font-weight: 600;
+    color: var(--ink-2);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  thead th:first-child,
+  thead th:nth-child(2),
+  thead th:nth-child(4) {
+    text-align: left;
+  }
+  tbody td {
+    padding: 7px 12px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid var(--grid);
+    white-space: nowrap;
+  }
+  tbody td:first-child,
+  tbody td:nth-child(2),
+  tbody td:nth-child(4) {
+    text-align: left;
+  }
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+  tbody tr:hover {
+    background: var(--surface-2);
+  }
+  .client-tag {
+    font-weight: 700;
+  }
+  .client-tag.native {
+    color: var(--native);
+  }
+  .client-tag.wreq {
+    color: var(--wreq);
+  }
+  .err-cell.has-err {
+    color: var(--critical);
+    font-weight: 700;
+  }
 
-  details.table-details summary { cursor: pointer; font-size: 13.5px; font-weight: 600; margin-bottom: 14px; color: var(--ink-2); user-select: none; }
-  details.table-details summary::marker { color: var(--muted); }
+  details.table-details summary {
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    color: var(--ink-2);
+    user-select: none;
+  }
+  details.table-details summary::marker {
+    color: var(--muted);
+  }
 
-  footer { margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); font-family: var(--mono); }
-  footer a { color: var(--ink-2); }
-  footer p { margin: 4px 0; }
+  footer {
+    margin-top: 72px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  footer a {
+    color: var(--ink-2);
+  }
+  footer p {
+    margin: 4px 0;
+  }
 
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition: none !important;
+    }
+  }
 </style>
 
 <div class="wrap">
-
-  <div class="eyebrow"><span class="dot"></span>benchmark report · k6 · native fetch vs my-fetch</div>
-  <h1>Under real load, native <code style="font-size:0.6em"></code>fetch<span class="accent"> falls over</span> where my-fetch doesn't</h1>
+  <div class="eyebrow">
+    <span class="dot"></span>benchmark report · k6 · native fetch vs my-fetch
+  </div>
+  <h1>
+    Under real load, native <code style="font-size: 0.6em"></code>fetch<span class="accent">
+      falls over</span
+    >
+    where my-fetch doesn't
+  </h1>
   <p class="lede">
-    132 k6 runs across 6 payload/latency profiles, concurrency 1→500 VUs and arrival rate 50→2000 req/s,
-    plus 50 cold real-HTTPS handshakes. Same synthetic upstream, same machine, sequential runs.
+    132 k6 runs across 6 payload/latency profiles, concurrency 1→500 VUs and arrival rate 50→2000
+    req/s, plus 50 cold real-HTTPS handshakes. Same synthetic upstream, same machine, sequential
+    runs.
   </p>
 
   <section id="tldr">
@@ -254,16 +555,20 @@
       <span class="note">rate sweep · profile huge_body · 2 MB, 0ms backend delay</span>
     </div>
     <p class="section-desc">
-      k6 held each client to a fixed arrival rate (open model — offered load is independent of how slow
-      the client responds). Bars show what was actually delivered; the dashed tick marks the target.
-      Falling short of the tick means the client queued faster than it could drain.
+      k6 held each client to a fixed arrival rate (open model — offered load is independent of how
+      slow the client responds). Bars show what was actually delivered; the dashed tick marks the
+      target. Falling short of the tick means the client queued faster than it could drain.
     </p>
     <div class="legend">
-      <span class="item"><span class="swatch" style="background:var(--native)"></span>native fetch</span>
-      <span class="item"><span class="swatch" style="background:var(--wreq)"></span>my-fetch</span>
-      <span class="item"><span class="swatch dashed" style="color:var(--muted)"></span>target rate</span>
+      <span class="item"
+        ><span class="swatch" style="background: var(--native)"></span>native fetch</span
+      >
+      <span class="item"><span class="swatch" style="background: var(--wreq)"></span>my-fetch</span>
+      <span class="item"
+        ><span class="swatch dashed" style="color: var(--muted)"></span>target rate</span
+      >
     </div>
-    <div class="panel" id="hero-chart-panel" style="margin-top:10px;">
+    <div class="panel" id="hero-chart-panel" style="margin-top: 10px">
       <svg id="hero-chart" viewBox="0 0 1100 340"></svg>
     </div>
   </section>
@@ -274,14 +579,16 @@
       <span class="note">constant-vus · 1 → 500 VUs · closed model</span>
     </div>
     <p class="section-desc">
-      Fixed number of virtual users, each firing requests back-to-back. Throughput is bounded by how fast
-      one request cycle completes, so this axis mostly measures per-call client overhead.
+      Fixed number of virtual users, each firing requests back-to-back. Throughput is bounded by how
+      fast one request cycle completes, so this axis mostly measures per-call client overhead.
     </p>
     <div class="legend">
-      <span class="item"><span class="swatch" style="background:var(--native)"></span>native fetch</span>
-      <span class="item"><span class="swatch" style="background:var(--wreq)"></span>my-fetch</span>
+      <span class="item"
+        ><span class="swatch" style="background: var(--native)"></span>native fetch</span
+      >
+      <span class="item"><span class="swatch" style="background: var(--wreq)"></span>my-fetch</span>
     </div>
-    <div class="chart-grid" id="grid-vus-throughput" style="margin-top:10px;"></div>
+    <div class="chart-grid" id="grid-vus-throughput" style="margin-top: 10px"></div>
   </section>
 
   <section id="concurrency-latency">
@@ -302,10 +609,11 @@
       <span class="note">constant-arrival-rate · 50 → 2000 req/s · open model</span>
     </div>
     <p class="section-desc">
-      k6 offers load independent of response speed — this is what reveals saturation. The dotted diagonal
-      is <code>delivered = offered</code>; a curve bending below it means the client can no longer keep up.
+      k6 offers load independent of response speed — this is what reveals saturation. The dotted
+      diagonal is <code>delivered = offered</code>; a curve bending below it means the client can no
+      longer keep up.
     </p>
-    <div class="chart-grid" id="grid-rate-throughput" style="margin-top:10px;"></div>
+    <div class="chart-grid" id="grid-rate-throughput" style="margin-top: 10px"></div>
   </section>
 
   <section id="throughput-latency">
@@ -322,16 +630,19 @@
       <span class="note">n=50 per client · fresh process per request · real HTTPS endpoint</span>
     </div>
     <p class="section-desc">
-      Local profiles above run over plain HTTP — my-fetch's bundled BoringSSL root store doesn't trust a
-      local self-signed cert, so the loopback matrix structurally can't include a TLS handshake. This probe
-      fills that gap: each request runs in a brand-new Node process against <code>https://example.com/</code>,
-      so connection pooling is impossible and every request pays full DNS + TCP + TLS.
+      Local profiles above run over plain HTTP — my-fetch's bundled BoringSSL root store doesn't
+      trust a local self-signed cert, so the loopback matrix structurally can't include a TLS
+      handshake. This probe fills that gap: each request runs in a brand-new Node process against
+      <code>https://example.com/</code>, so connection pooling is impossible and every request pays
+      full DNS + TCP + TLS.
     </p>
     <div class="legend">
-      <span class="item"><span class="swatch" style="background:var(--native)"></span>native fetch</span>
-      <span class="item"><span class="swatch" style="background:var(--wreq)"></span>my-fetch</span>
+      <span class="item"
+        ><span class="swatch" style="background: var(--native)"></span>native fetch</span
+      >
+      <span class="item"><span class="swatch" style="background: var(--wreq)"></span>my-fetch</span>
     </div>
-    <div class="panel" style="margin-top:10px;">
+    <div class="panel" style="margin-top: 10px">
       <svg id="cold-chart" viewBox="0 0 1100 220"></svg>
     </div>
   </section>
@@ -339,11 +650,12 @@
   <section id="method">
     <div class="section-head"><h2>Method</h2></div>
     <div class="callout">
-      <strong>Why a gateway, not k6 calling the library directly.</strong> k6 scripts run in goja, k6's own
-      Go-based JS engine — it cannot load Node's <code>fetch</code> (undici) or this project's native N-API
-      addon. Each client instead runs behind a tiny HTTP wrapper; k6 drives load against the wrapper, which
-      forwards to a synthetic upstream and reports its own outbound-call time via a response header. This
-      also matches how my-fetch is actually used in production — server-side, behind a request handler.
+      <strong>Why a gateway, not k6 calling the library directly.</strong> k6 scripts run in goja,
+      k6's own Go-based JS engine — it cannot load Node's <code>fetch</code> (undici) or this
+      project's native N-API addon. Each client instead runs behind a tiny HTTP wrapper; k6 drives
+      load against the wrapper, which forwards to a synthetic upstream and reports its own
+      outbound-call time via a response header. This also matches how my-fetch is actually used in
+      production — server-side, behind a request handler.
     </div>
     <div class="arch-steps">
       <span class="box">k6 (load generator)</span>
@@ -360,14 +672,16 @@
       <span class="box">synthetic upstream</span>
     </div>
     <p class="section-desc">
-      Both gateways reuse one pooled connection to the upstream (verified: 20 sequential requests → 1 socket,
-      for both clients) so the comparison isn't skewed by connection setup. native and wreq gateways run as
-      separate processes and every scenario runs <strong>sequentially, never concurrently</strong> — my-fetch
-      does its I/O on Rust/tokio threads off the Node event loop, undici runs mostly on it, and racing the two
-      would have the asymmetric threading models fight for the same cores instead of measuring the client.
-      Upstream response bodies are pre-allocated per size and cached, so the upstream itself never becomes the
-      confound. Full script set: <code>bench/upstream-server.js</code>, <code>bench/gateway-server.js</code>,
-      <code>bench/k6-scenario.js</code>, <code>bench/run-matrix.sh</code>, <code>bench/cold-tls-probe.js</code>.
+      Both gateways reuse one pooled connection to the upstream (verified: 20 sequential requests →
+      1 socket, for both clients) so the comparison isn't skewed by connection setup. native and
+      wreq gateways run as separate processes and every scenario runs
+      <strong>sequentially, never concurrently</strong> — my-fetch does its I/O on Rust/tokio
+      threads off the Node event loop, undici runs mostly on it, and racing the two would have the
+      asymmetric threading models fight for the same cores instead of measuring the client. Upstream
+      response bodies are pre-allocated per size and cached, so the upstream itself never becomes
+      the confound. Full script set: <code>bench/upstream-server.js</code>,
+      <code>bench/gateway-server.js</code>, <code>bench/k6-scenario.js</code>,
+      <code>bench/run-matrix.sh</code>, <code>bench/cold-tls-probe.js</code>.
     </p>
   </section>
 
@@ -379,8 +693,15 @@
         <table id="data-table">
           <thead>
             <tr>
-              <th>sweep</th><th>profile</th><th>param</th><th>client</th>
-              <th>req/s</th><th>http p95 (ms)</th><th>client avg (ms)</th><th>client p95 (ms)</th><th>error %</th>
+              <th>sweep</th>
+              <th>profile</th>
+              <th>param</th>
+              <th>client</th>
+              <th>req/s</th>
+              <th>http p95 (ms)</th>
+              <th>client avg (ms)</th>
+              <th>client p95 (ms)</th>
+              <th>error %</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -390,400 +711,618 @@
   </section>
 
   <footer>
-    <p>Generated from bench/results/summary.csv + bench/results/cold-tls-probe-example.txt · reproduce with <code>bash bench/run-matrix.sh</code> (set <code>QUICK=1</code> for a fast smoke pass).</p>
+    <p>
+      Generated from bench/results/summary.csv + bench/results/cold-tls-probe-example.txt ·
+      reproduce with <code>bash bench/run-matrix.sh</code> (set <code>QUICK=1</code> for a fast
+      smoke pass).
+    </p>
     <p>my-fetch — wreq/BoringSSL TLS/HTTP2-fingerprint-impersonating fetch() for Node.js.</p>
   </footer>
-
 </div>
 
 <div class="tooltip" id="tooltip"></div>
 
-<script id="report-data" type="application/json">{"generatedNote":"bench/results/summary.csv + bench/results/cold-tls-probe-example.txt","profileMeta":{"fast_small":{"label":"512 B, 0 ms delay","desc":"baseline: tiny payload, instant backend"},"small_fast":{"label":"4 KB, 0 ms delay","desc":"small JSON-ish payload, instant backend"},"typical":{"label":"4 KB, 20 ms delay","desc":"typical API call"},"large_nodelay":{"label":"256 KB, 0 ms delay","desc":"large payload, instant backend"},"slow_large":{"label":"64 KB, 100 ms delay","desc":"slow backend, medium payload"},"huge_body":{"label":"2 MB, 0 ms delay","desc":"large transfer, backend-bound throughput"}},"vus":{"fast_small":[{"sweep":"vus","profile":"fast_small","param":1,"client":"native","req_per_sec":606.0409726890955,"http_avg_ms":1.5918739551253858,"http_p95_ms":1.952,"client_avg_ms":1.4344593048834122,"client_p95_ms":1.692,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":1,"client":"wreq","req_per_sec":3252.220918759076,"http_avg_ms":0.27991005247622264,"http_p95_ms":0.365,"client_avg_ms":0.21401254509675116,"client_p95_ms":0.28,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":10,"client":"native","req_per_sec":5468.310992814905,"http_avg_ms":1.8007669896995138,"http_p95_ms":2.235,"client_avg_ms":1.5557929664167538,"client_p95_ms":1.949,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":10,"client":"wreq","req_per_sec":21625.851745529602,"http_avg_ms":0.43602116221074433,"http_p95_ms":0.624,"client_avg_ms":0.2969643710368936,"client_p95_ms":0.442,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":50,"client":"native","req_per_sec":19645.231077862096,"http_avg_ms":2.5177223247670946,"http_p95_ms":4.453,"client_avg_ms":1.7297061603816388,"client_p95_ms":2.551,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":50,"client":"wreq","req_per_sec":24948.28715167611,"http_avg_ms":1.9684398419297564,"http_p95_ms":2.6778499999999834,"client_avg_ms":1.1928704497359999,"client_p95_ms":1.653,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":100,"client":"native","req_per_sec":19105.846541798986,"http_avg_ms":5.205089601908842,"http_p95_ms":8.516,"client_avg_ms":3.374793259101135,"client_p95_ms":6.338,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":100,"client":"wreq","req_per_sec":24987.42263956871,"http_avg_ms":3.9598383872603296,"http_p95_ms":5.235,"client_avg_ms":2.3315250366774682,"client_p95_ms":3.147,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":250,"client":"native","req_per_sec":17931.317242606165,"http_avg_ms":13.893784579041949,"http_p95_ms":17.566,"client_avg_ms":8.277300374028334,"client_p95_ms":11.892499999999988,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":250,"client":"wreq","req_per_sec":24149.45361458936,"http_avg_ms":10.28630888077751,"http_p95_ms":14.525399999999967,"client_avg_ms":5.358117122858761,"client_p95_ms":7.544,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":500,"client":"native","req_per_sec":16793.844234622837,"http_avg_ms":28.96736782238089,"http_p95_ms":35.21,"client_avg_ms":17.00611615422758,"client_p95_ms":22.864,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":500,"client":"wreq","req_per_sec":23514.520997341246,"http_avg_ms":20.803376032601403,"http_p95_ms":27.965,"client_avg_ms":11.310677986933609,"client_p95_ms":17.149,"error_rate":0}],"huge_body":[{"sweep":"vus","profile":"huge_body","param":1,"client":"native","req_per_sec":358.492345708474,"http_avg_ms":2.7151494979546227,"http_p95_ms":3.56,"client_avg_ms":1.986432316846414,"client_p95_ms":2.5091499999999995,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":1,"client":"wreq","req_per_sec":756.5624745012648,"http_avg_ms":1.2610377125737988,"http_p95_ms":1.762,"client_avg_ms":0.6684992510353334,"client_p95_ms":0.942,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":10,"client":"native","req_per_sec":779.9834450046051,"http_avg_ms":12.747938418175625,"http_p95_ms":15.077549999999997,"client_avg_ms":8.030899470447551,"client_p95_ms":10.782599999999999,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":10,"client":"wreq","req_per_sec":2031.7088948514001,"http_avg_ms":4.849958076367915,"http_p95_ms":6.207,"client_avg_ms":2.8838309276997878,"client_p95_ms":4.551,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":50,"client":"native","req_per_sec":761.8969967049533,"http_avg_ms":65.43328784313725,"http_p95_ms":71.8719,"client_avg_ms":38.83718300653595,"client_p95_ms":44.29449999999999,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":50,"client":"wreq","req_per_sec":2158.6894373140913,"http_avg_ms":23.0732226916673,"http_p95_ms":26.197,"client_avg_ms":11.863414235489994,"client_p95_ms":15.672749999999999,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":100,"client":"native","req_per_sec":790.8496520307807,"http_avg_ms":125.90736420630297,"http_p95_ms":140.4818,"client_avg_ms":74.35879252695823,"client_p95_ms":85.8055,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":100,"client":"wreq","req_per_sec":2187.3230856286164,"http_avg_ms":45.57894960945789,"http_p95_ms":50.241899999999994,"client_avg_ms":23.33855010181436,"client_p95_ms":29.642,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":250,"client":"native","req_per_sec":432.7764589501091,"http_avg_ms":568.7818369877515,"http_p95_ms":1069.2105999999999,"client_avg_ms":267.75023332829187,"client_p95_ms":665.252,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":250,"client":"wreq","req_per_sec":1814.477856769646,"http_avg_ms":136.7195006547831,"http_p95_ms":148.3696,"client_avg_ms":89.64617289923588,"client_p95_ms":122.92924999999998,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":500,"client":"native","req_per_sec":730.3153088510119,"http_avg_ms":460.90528125549514,"http_p95_ms":423.40664999999996,"client_avg_ms":178.09698474515397,"client_p95_ms":242.99665,"error_rate":0.020221557939159487},{"sweep":"vus","profile":"huge_body","param":500,"client":"wreq","req_per_sec":1918.956588224808,"http_avg_ms":228.95652243611772,"http_p95_ms":226.61704999999998,"client_avg_ms":84.482158958348,"client_p95_ms":122.45099999999998,"error_rate":0.0016441734603000616}],"large_nodelay":[{"sweep":"vus","profile":"large_nodelay","param":1,"client":"native","req_per_sec":514.562299735506,"http_avg_ms":1.8692462754242796,"http_p95_ms":2.67,"client_avg_ms":1.5823183054799839,"client_p95_ms":2.0681,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":1,"client":"wreq","req_per_sec":1885.4217936279783,"http_avg_ms":0.48731475850364475,"http_p95_ms":0.655,"client_avg_ms":0.3434711477264667,"client_p95_ms":0.449,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":10,"client":"native","req_per_sec":3788.0027582317857,"http_avg_ms":2.5961563638283187,"http_p95_ms":3.55,"client_avg_ms":1.8784273522321404,"client_p95_ms":3.013,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":10,"client":"wreq","req_per_sec":8915.485670121963,"http_avg_ms":1.0788585506639405,"http_p95_ms":2.005,"client_avg_ms":0.6603431929656727,"client_p95_ms":1.246,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":50,"client":"native","req_per_sec":4767.218541038559,"http_avg_ms":10.438612076315568,"http_p95_ms":12.259799999999997,"client_avg_ms":6.417796016493114,"client_p95_ms":9.222,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":50,"client":"wreq","req_per_sec":9848.08204126936,"http_avg_ms":5.023241625272437,"http_p95_ms":6.632,"client_avg_ms":2.675853004074021,"client_p95_ms":4.286,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":100,"client":"native","req_per_sec":4707.670481442633,"http_avg_ms":21.1839823494471,"http_p95_ms":23.325749999999996,"client_avg_ms":12.137477328656752,"client_p95_ms":16.561,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":100,"client":"wreq","req_per_sec":9509.378560478763,"http_avg_ms":10.457958340923472,"http_p95_ms":12.567,"client_avg_ms":5.374433314650067,"client_p95_ms":7.851,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":250,"client":"native","req_per_sec":4342.277737149483,"http_avg_ms":57.08238083726075,"http_p95_ms":61.263,"client_avg_ms":30.635440648142627,"client_p95_ms":37.802,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":250,"client":"wreq","req_per_sec":8990.193931592474,"http_avg_ms":27.703425424958738,"http_p95_ms":31.511,"client_avg_ms":13.67793450159906,"client_p95_ms":16.736449999999994,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":500,"client":"native","req_per_sec":4092.044065333868,"http_avg_ms":108.80225320102882,"http_p95_ms":157.2696,"client_avg_ms":50.931921346131936,"client_p95_ms":72.0474,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":500,"client":"wreq","req_per_sec":6929.820244296454,"http_avg_ms":68.93069947670111,"http_p95_ms":104.32789999999997,"client_avg_ms":33.1624669248021,"client_p95_ms":51.14789999999997,"error_rate":0.000057505415093254615}],"slow_large":[{"sweep":"vus","profile":"slow_large","param":1,"client":"native","req_per_sec":9.390369862693479,"http_avg_ms":106.11208510638292,"http_p95_ms":109.352,"client_avg_ms":105.16426241134751,"client_p95_ms":107.587,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":1,"client":"wreq","req_per_sec":9.436370883399816,"http_avg_ms":105.66030985915486,"http_p95_ms":111.37955000000001,"client_avg_ms":104.61415492957745,"client_p95_ms":109.5217,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":10,"client":"native","req_per_sec":91.06071226298387,"http_avg_ms":109.55564218181811,"http_p95_ms":118.2652,"client_avg_ms":106.6003738181818,"client_p95_ms":113.49249999999999,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":10,"client":"wreq","req_per_sec":91.85604320908273,"http_avg_ms":108.5823173913042,"http_p95_ms":117.1766,"client_avg_ms":106.82658695652165,"client_p95_ms":114.28739999999999,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":50,"client":"native","req_per_sec":420.30937550035844,"http_avg_ms":118.80098866141724,"http_p95_ms":127.023,"client_avg_ms":113.90117417322752,"client_p95_ms":122.68565,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":50,"client":"wreq","req_per_sec":451.57982690721235,"http_avg_ms":110.5596200469618,"http_p95_ms":119.07085,"client_avg_ms":108.44302494863501,"client_p95_ms":116.91985,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":100,"client":"native","req_per_sec":862.7620006653228,"http_avg_ms":115.27578749520576,"http_p95_ms":126.28129999999999,"client_avg_ms":109.50008354430435,"client_p95_ms":118.89659999999999,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":100,"client":"wreq","req_per_sec":941.1226567615157,"http_avg_ms":105.54607007668976,"http_p95_ms":115.0638,"client_avg_ms":103.75419432913517,"client_p95_ms":111.7148,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":250,"client":"native","req_per_sec":2382.090903931715,"http_avg_ms":104.39645343600617,"http_p95_ms":109.275,"client_avg_ms":103.00884646391687,"client_p95_ms":106.05945,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":250,"client":"wreq","req_per_sec":2415.463424005978,"http_avg_ms":103.19674894259708,"http_p95_ms":107.273,"client_avg_ms":102.0645816533917,"client_p95_ms":105.08655,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":500,"client":"native","req_per_sec":4533.022066789023,"http_avg_ms":109.6136523936096,"http_p95_ms":132.79135,"client_avg_ms":106.02822138329914,"client_p95_ms":121.34535,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":500,"client":"wreq","req_per_sec":4754.922684089796,"http_avg_ms":104.5398748868623,"http_p95_ms":114.9303,"client_avg_ms":102.6831252663087,"client_p95_ms":108.963,"error_rate":0}],"small_fast":[{"sweep":"vus","profile":"small_fast","param":1,"client":"native","req_per_sec":553.3897438434141,"http_avg_ms":1.7223676665461976,"http_p95_ms":2.301,"client_avg_ms":1.5030836043850153,"client_p95_ms":1.88,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":1,"client":"wreq","req_per_sec":3235.478545896623,"http_avg_ms":0.28223184225166564,"http_p95_ms":0.351,"client_avg_ms":0.21558483918158422,"client_p95_ms":0.269,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":10,"client":"native","req_per_sec":5394.529999374077,"http_avg_ms":1.820982552392237,"http_p95_ms":2.822,"client_avg_ms":1.5461057606761537,"client_p95_ms":2.289,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":10,"client":"wreq","req_per_sec":20628.318519194843,"http_avg_ms":0.45785094532248966,"http_p95_ms":0.621,"client_avg_ms":0.3094691849420461,"client_p95_ms":0.449,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":50,"client":"native","req_per_sec":17868.55621881786,"http_avg_ms":2.7669521519855658,"http_p95_ms":5.203,"client_avg_ms":1.8765243958847975,"client_p95_ms":3.17,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":50,"client":"wreq","req_per_sec":23816.500835643306,"http_avg_ms":2.063124841163668,"http_p95_ms":2.537,"client_avg_ms":1.255600328588323,"client_p95_ms":1.664,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":100,"client":"native","req_per_sec":18634.670326620348,"http_avg_ms":5.336569237481279,"http_p95_ms":8.391,"client_avg_ms":3.444018645467952,"client_p95_ms":5.971,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":100,"client":"wreq","req_per_sec":23546.16107039058,"http_avg_ms":4.205077497763471,"http_p95_ms":5.233,"client_avg_ms":2.4834400797200864,"client_p95_ms":3.360249999999984,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":250,"client":"native","req_per_sec":17065.95095764143,"http_avg_ms":14.592156259758458,"http_p95_ms":18.851,"client_avg_ms":8.671610951064807,"client_p95_ms":12.558,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":250,"client":"wreq","req_per_sec":22526.93411699244,"http_avg_ms":11.043416978503412,"http_p95_ms":15.404,"client_avg_ms":5.910918961931839,"client_p95_ms":8.525,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":500,"client":"native","req_per_sec":16208.167952237187,"http_avg_ms":29.969110970183298,"http_p95_ms":37.157,"client_avg_ms":17.478616137982794,"client_p95_ms":23.705849999999987,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":500,"client":"wreq","req_per_sec":22857.37801868052,"http_avg_ms":21.593026872541973,"http_p95_ms":29.677,"client_avg_ms":12.032699300801363,"client_p95_ms":17.877,"error_rate":0}],"typical":[{"sweep":"vus","profile":"typical","param":1,"client":"native","req_per_sec":41.36881894220263,"http_avg_ms":23.978032206119153,"http_p95_ms":25.668,"client_avg_ms":23.559346215780984,"client_p95_ms":25.129,"error_rate":0},{"sweep":"vus","profile":"typical","param":1,"client":"wreq","req_per_sec":42.7512578658652,"http_avg_ms":23.193747663551406,"http_p95_ms":24.495,"client_avg_ms":22.79729595015577,"client_p95_ms":23.9817,"error_rate":0},{"sweep":"vus","profile":"typical","param":10,"client":"native","req_per_sec":399.5987082463509,"http_avg_ms":24.923442535446224,"http_p95_ms":27.758,"client_avg_ms":23.90265854879067,"client_p95_ms":26.257699999999996,"error_rate":0},{"sweep":"vus","profile":"typical","param":10,"client":"wreq","req_per_sec":408.2327786696177,"http_avg_ms":24.383586077600192,"http_p95_ms":27.292099999999998,"client_avg_ms":23.685600749918468,"client_p95_ms":26.208149999999996,"error_rate":0},{"sweep":"vus","profile":"typical","param":50,"client":"native","req_per_sec":2046.585256293055,"http_avg_ms":24.35067407070181,"http_p95_ms":27.5746,"client_avg_ms":23.198905427818797,"client_p95_ms":25.926,"error_rate":0},{"sweep":"vus","profile":"typical","param":50,"client":"wreq","req_per_sec":2032.7508057535113,"http_avg_ms":24.50072366267275,"http_p95_ms":28.08475,"client_avg_ms":23.510392882865318,"client_p95_ms":26.713749999999997,"error_rate":0},{"sweep":"vus","profile":"typical","param":100,"client":"native","req_per_sec":4248.146377754377,"http_avg_ms":23.48348224916987,"http_p95_ms":26.081299999999995,"client_avg_ms":22.572072476029014,"client_p95_ms":24.739649999999997,"error_rate":0},{"sweep":"vus","profile":"typical","param":100,"client":"wreq","req_per_sec":4228.028573117056,"http_avg_ms":23.571835056901218,"http_p95_ms":26.984,"client_avg_ms":22.50409412727656,"client_p95_ms":25.509,"error_rate":0},{"sweep":"vus","profile":"typical","param":250,"client":"native","req_per_sec":10632.993313772437,"http_avg_ms":23.400204603068637,"http_p95_ms":25.985899999999994,"client_avg_ms":22.431746042575632,"client_p95_ms":24.314,"error_rate":0},{"sweep":"vus","profile":"typical","param":250,"client":"wreq","req_per_sec":11022.197028037324,"http_avg_ms":22.610605791586988,"http_p95_ms":25.535,"client_avg_ms":21.598886112872965,"client_p95_ms":23.586,"error_rate":0},{"sweep":"vus","profile":"typical","param":500,"client":"native","req_per_sec":15809.096030960896,"http_avg_ms":31.53698488528208,"http_p95_ms":37.455,"client_avg_ms":27.379076495372832,"client_p95_ms":31.458,"error_rate":0},{"sweep":"vus","profile":"typical","param":500,"client":"wreq","req_per_sec":18957.302749077502,"http_avg_ms":26.296419693304454,"http_p95_ms":32.975,"client_avg_ms":23.408833023734186,"client_p95_ms":28.651,"error_rate":0}]},"rate":{"fast_small":[{"sweep":"rate","profile":"fast_small","param":50,"client":"native","req_per_sec":50.05704236598777,"http_avg_ms":3.155868175765647,"http_p95_ms":5.358999999999999,"client_avg_ms":2.4281198402130473,"client_p95_ms":3.8394999999999992,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":50,"client":"wreq","req_per_sec":50.05627498397999,"http_avg_ms":2.5988415446071906,"http_p95_ms":4.773999999999999,"client_avg_ms":1.8831970705725682,"client_p95_ms":3.3539999999999988,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":200,"client":"native","req_per_sec":199.98776074904217,"http_avg_ms":2.5153493333333317,"http_p95_ms":4.3485999999999985,"client_avg_ms":2.000943000000001,"client_p95_ms":3.2441999999999998,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":200,"client":"wreq","req_per_sec":199.99160035278518,"http_avg_ms":1.4016573333333335,"http_p95_ms":2.8311999999999995,"client_avg_ms":1.0052939999999995,"client_p95_ms":2.103,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":500,"client":"native","req_per_sec":499.98040338107,"http_avg_ms":1.9472421010531928,"http_p95_ms":3,"client_avg_ms":1.6160886548460236,"client_p95_ms":2.326,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":500,"client":"wreq","req_per_sec":500.0128319517599,"http_avg_ms":0.8602998266897728,"http_p95_ms":1.869,"client_avg_ms":0.6048129582722297,"client_p95_ms":1.35,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":1000,"client":"native","req_per_sec":999.8303734217479,"http_avg_ms":1.4470595293647064,"http_p95_ms":2.078,"client_avg_ms":1.2340573295113622,"client_p95_ms":1.626,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":1000,"client":"wreq","req_per_sec":999.891011879705,"http_avg_ms":0.5639391333333327,"http_p95_ms":0.706,"client_avg_ms":0.39962540000000074,"client_p95_ms":0.483,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":2000,"client":"native","req_per_sec":1999.5876987598904,"http_avg_ms":1.1802647911736326,"http_p95_ms":1.673,"client_avg_ms":1.0039122695910156,"client_p95_ms":1.307,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":2000,"client":"wreq","req_per_sec":1999.7097754545891,"http_avg_ms":0.3190212666666677,"http_p95_ms":0.376,"client_avg_ms":0.23343586666666563,"client_p95_ms":0.271,"error_rate":0}],"huge_body":[{"sweep":"rate","profile":"huge_body","param":50,"client":"native","req_per_sec":49.99661022982642,"http_avg_ms":4.267871999999999,"http_p95_ms":6.4327999999999985,"client_avg_ms":2.8659759999999994,"client_p95_ms":4.167399999999996,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":50,"client":"wreq","req_per_sec":50.050590417024715,"http_avg_ms":3.1344314247669764,"http_p95_ms":4.936999999999997,"client_avg_ms":1.735406125166445,"client_p95_ms":2.5569999999999995,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":200,"client":"native","req_per_sec":200.01518275862458,"http_avg_ms":2.6584698433855354,"http_p95_ms":3.451,"client_avg_ms":1.9260883038986991,"client_p95_ms":2.456,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":200,"client":"wreq","req_per_sec":200.0266346695148,"http_avg_ms":1.9458893702099285,"http_p95_ms":2.724,"client_avg_ms":1.0279120293235586,"client_p95_ms":1.462,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":500,"client":"native","req_per_sec":499.9428731943563,"http_avg_ms":3.7628181333333313,"http_p95_ms":6.19205,"client_avg_ms":2.407634666666661,"client_p95_ms":4.146549999999996,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":500,"client":"wreq","req_per_sec":499.98043409901226,"http_avg_ms":1.7800719999999988,"http_p95_ms":2.5190999999999995,"client_avg_ms":0.9328682666666617,"client_p95_ms":1.4500999999999993,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":1000,"client":"native","req_per_sec":636.301672934161,"http_avg_ms":1018.8275612590788,"http_p95_ms":1779.33735,"client_avg_ms":597.7729370860931,"client_p95_ms":1124.36015,"error_rate":0.14689265536723164},{"sweep":"rate","profile":"huge_body","param":1000,"client":"wreq","req_per_sec":999.93953698933,"http_avg_ms":1.6482794666666647,"http_p95_ms":3.2981999999999974,"client_avg_ms":0.9267884000000016,"client_p95_ms":1.925,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":2000,"client":"native","req_per_sec":885.9116611589718,"http_avg_ms":631.7024110343358,"http_p95_ms":1557.42975,"client_avg_ms":557.23517933373,"client_p95_ms":1023.6135,"error_rate":0.45875620816238394},{"sweep":"rate","profile":"huge_body","param":2000,"client":"wreq","req_per_sec":855.1808191688174,"http_avg_ms":1545.937460764277,"http_p95_ms":3615.343,"client_avg_ms":1033.8792428783524,"client_p95_ms":2353.946,"error_rate":0.2584263773129947}],"large_nodelay":[{"sweep":"rate","profile":"large_nodelay","param":50,"client":"native","req_per_sec":49.99656023665572,"http_avg_ms":3.6910293333333373,"http_p95_ms":7.0666999999999955,"client_avg_ms":2.782799999999999,"client_p95_ms":5.206449999999997,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":50,"client":"wreq","req_per_sec":49.995757026753665,"http_avg_ms":2.940759999999999,"http_p95_ms":5.426599999999997,"client_avg_ms":2.1048106666666637,"client_p95_ms":3.8931499999999977,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":200,"client":"native","req_per_sec":200.01799562106552,"http_avg_ms":2.3560263245584823,"http_p95_ms":3.774,"client_avg_ms":1.8453928690436534,"client_p95_ms":2.792,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":200,"client":"wreq","req_per_sec":199.98652090849077,"http_avg_ms":1.5404000000000004,"http_p95_ms":2.87105,"client_avg_ms":1.0617003333333332,"client_p95_ms":2.09515,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":500,"client":"native","req_per_sec":499.98286953773214,"http_avg_ms":1.774408745500596,"http_p95_ms":2.443,"client_avg_ms":1.4362655645913915,"client_p95_ms":1.939,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":500,"client":"wreq","req_per_sec":500.00406615758374,"http_avg_ms":1.0119112118384204,"http_p95_ms":1.421,"client_avg_ms":0.6510711905079293,"client_p95_ms":0.92,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":1000,"client":"native","req_per_sec":999.8812886757462,"http_avg_ms":1.4387333511099298,"http_p95_ms":2.009,"client_avg_ms":1.191942937137528,"client_p95_ms":1.624,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":1000,"client":"wreq","req_per_sec":999.9353375148406,"http_avg_ms":0.6746799333333264,"http_p95_ms":1.0590999999999986,"client_avg_ms":0.4462567999999992,"client_p95_ms":0.629,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":2000,"client":"native","req_per_sec":1999.7000549899185,"http_avg_ms":1.4523079897336861,"http_p95_ms":2.248,"client_avg_ms":1.156823805873136,"client_p95_ms":1.773,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":2000,"client":"wreq","req_per_sec":1999.7307029320052,"http_avg_ms":0.4705393666666631,"http_p95_ms":0.855,"client_avg_ms":0.32194786666667347,"client_p95_ms":0.511,"error_rate":0}],"slow_large":[{"sweep":"rate","profile":"slow_large","param":50,"client":"native","req_per_sec":49.72200097773342,"http_avg_ms":103.48026666666652,"http_p95_ms":107.33024999999999,"client_avg_ms":102.7991413333333,"client_p95_ms":105.95665,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":50,"client":"wreq","req_per_sec":49.72470744468375,"http_avg_ms":102.18315866666666,"http_p95_ms":105.09655,"client_avg_ms":101.65077599999972,"client_p95_ms":104.32164999999999,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":200,"client":"native","req_per_sec":198.69508772245774,"http_avg_ms":102.43049283572125,"http_p95_ms":104.511,"client_avg_ms":101.99122692435853,"client_p95_ms":103.709,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":200,"client":"wreq","req_per_sec":198.7126124305499,"http_avg_ms":101.13241486171297,"http_p95_ms":102.83,"client_avg_ms":100.82124058647105,"client_p95_ms":102.298,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":500,"client":"native","req_per_sec":496.70288624113135,"http_avg_ms":101.56928706666656,"http_p95_ms":102.707,"client_avg_ms":101.33096133333324,"client_p95_ms":102.42805,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":500,"client":"wreq","req_per_sec":496.6998364949692,"http_avg_ms":100.72678549526688,"http_p95_ms":101.093,"client_avg_ms":100.48545167311056,"client_p95_ms":100.77,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":1000,"client":"native","req_per_sec":993.1656222350457,"http_avg_ms":101.56025191653923,"http_p95_ms":101.982,"client_avg_ms":101.32647330178042,"client_p95_ms":101.629,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":1000,"client":"wreq","req_per_sec":993.3542409425377,"http_avg_ms":100.63728084794371,"http_p95_ms":101.697,"client_avg_ms":100.40256556229627,"client_p95_ms":101.422,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":2000,"client":"native","req_per_sec":1986.3134324603116,"http_avg_ms":101.27896226792403,"http_p95_ms":102.074,"client_avg_ms":101.07181567281116,"client_p95_ms":101.706,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":2000,"client":"wreq","req_per_sec":1986.5796450179964,"http_avg_ms":100.26479644011867,"http_p95_ms":100.886,"client_avg_ms":100.11591973600889,"client_p95_ms":100.598,"error_rate":0}],"small_fast":[{"sweep":"rate","profile":"small_fast","param":50,"client":"native","req_per_sec":50.05077054194255,"http_avg_ms":3.0799121171771,"http_p95_ms":5.3629999999999995,"client_avg_ms":2.3731171770972077,"client_p95_ms":3.754,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":50,"client":"wreq","req_per_sec":49.99562038365439,"http_avg_ms":2.299622666666668,"http_p95_ms":3.932,"client_avg_ms":1.6644106666666667,"client_p95_ms":2.90755,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":200,"client":"native","req_per_sec":200.00990385595233,"http_avg_ms":2.4483642119293587,"http_p95_ms":4.146,"client_avg_ms":1.9374158613795358,"client_p95_ms":3.052,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":200,"client":"wreq","req_per_sec":200.02606137620728,"http_avg_ms":1.4278510496501193,"http_p95_ms":2.867,"client_avg_ms":1.0136341219593457,"client_p95_ms":2.103,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":500,"client":"native","req_per_sec":499.9618080101334,"http_avg_ms":1.8656665777896284,"http_p95_ms":3.419,"client_avg_ms":1.5215928542860957,"client_p95_ms":2.636,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":500,"client":"wreq","req_per_sec":500.00059992073045,"http_avg_ms":0.879306359152113,"http_p95_ms":1.796,"client_avg_ms":0.6178641514464717,"client_p95_ms":1.302,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":1000,"client":"native","req_per_sec":999.848756211477,"http_avg_ms":1.436603466666664,"http_p95_ms":2.071099999999999,"client_avg_ms":1.225212000000004,"client_p95_ms":1.604,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":1000,"client":"wreq","req_per_sec":999.9024761784901,"http_avg_ms":0.5882934,"http_p95_ms":0.7630499999999993,"client_avg_ms":0.40656060000000044,"client_p95_ms":0.496,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":2000,"client":"native","req_per_sec":1999.684860170698,"http_avg_ms":1.1698980033998827,"http_p95_ms":1.629,"client_avg_ms":0.9945841805273233,"client_p95_ms":1.278,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":2000,"client":"wreq","req_per_sec":1999.8052254635245,"http_avg_ms":0.34475950801639965,"http_p95_ms":0.398,"client_avg_ms":0.24482823905869905,"client_p95_ms":0.276,"error_rate":0}],"typical":[{"sweep":"rate","profile":"typical","param":50,"client":"native","req_per_sec":49.973349764872395,"http_avg_ms":23.275938748335523,"http_p95_ms":26.584999999999997,"client_avg_ms":22.631846870838867,"client_p95_ms":25.245499999999996,"error_rate":0},{"sweep":"rate","profile":"typical","param":50,"client":"wreq","req_per_sec":49.97158406794112,"http_avg_ms":22.416958721704386,"http_p95_ms":26.109999999999996,"client_avg_ms":21.873625832223713,"client_p95_ms":24.5735,"error_rate":0},{"sweep":"rate","profile":"typical","param":200,"client":"native","req_per_sec":199.73329847595707,"http_avg_ms":22.911659113628797,"http_p95_ms":25.719,"client_avg_ms":22.34052282572474,"client_p95_ms":24.685,"error_rate":0},{"sweep":"rate","profile":"typical","param":200,"client":"wreq","req_per_sec":199.77437012658876,"http_avg_ms":21.890994335221553,"http_p95_ms":24.247,"client_avg_ms":21.445194935021643,"client_p95_ms":23.38,"error_rate":0},{"sweep":"rate","profile":"typical","param":500,"client":"native","req_per_sec":499.3335119155714,"http_avg_ms":21.97607279029461,"http_p95_ms":23.738,"client_avg_ms":21.6514472736968,"client_p95_ms":23.133,"error_rate":0},{"sweep":"rate","profile":"typical","param":500,"client":"wreq","req_per_sec":499.315762335549,"http_avg_ms":20.741343154246092,"http_p95_ms":21.651,"client_avg_ms":20.516253966137842,"client_p95_ms":21.405,"error_rate":0},{"sweep":"rate","profile":"typical","param":1000,"client":"native","req_per_sec":998.6274447932307,"http_avg_ms":21.482332177854826,"http_p95_ms":22.454,"client_avg_ms":21.281394307046323,"client_p95_ms":22.095,"error_rate":0},{"sweep":"rate","profile":"typical","param":1000,"client":"wreq","req_per_sec":998.6603969435399,"http_avg_ms":20.518010866666724,"http_p95_ms":20.65,"client_avg_ms":20.37369266666684,"client_p95_ms":20.482,"error_rate":0},{"sweep":"rate","profile":"typical","param":2000,"client":"native","req_per_sec":1997.1024705954953,"http_avg_ms":21.190950533333307,"http_p95_ms":21.857,"client_avg_ms":21.028289566666636,"client_p95_ms":21.39005,"error_rate":0},{"sweep":"rate","profile":"typical","param":2000,"client":"wreq","req_per_sec":1997.109117981418,"http_avg_ms":20.203750599999978,"http_p95_ms":20.56705,"client_avg_ms":20.0860530000001,"client_p95_ms":20.41,"error_rate":0}]},"cold":{"native":[138,107,109.1,107.7,107.8,107.7,109.3,110.8,106.2,108.5,107.6,104.2,107.5,105.6,106.9,109.7,111.8,108.5,106.6,109.6,104.1,107.4,109.2,104.1,107.4,108.8,105.7,106.6,105.2,104.3,107.1,108,102.9,107,102.8,106.3,111.2,110.1,112.1,106.4,104.2,106.6,111.3,104.8,111.4,107.2,107.7,102.1,109.4,105.8],"wreq":[83.4,70.9,62.8,60.8,63,57.5,63,65,69.1,58.3,64.1,65.5,59.6,64.8,62.4,60.8,64.4,65.4,61.4,60.5,63.3,62.9,59.7,60,61.8,61.6,62,61.3,62.6,61.1,63.4,63.7,67.2,59.7,65.1,62.1,61.7,58.8,66.3,66.6,60.8,64.7,60.3,58.3,63.6,67.8,59.8,64,62.4,66.1]}}</script>
+<script id="report-data" type="application/json">
+  {"generatedNote":"bench/results/summary.csv + bench/results/cold-tls-probe-example.txt","profileMeta":{"fast_small":{"label":"512 B, 0 ms delay","desc":"baseline: tiny payload, instant backend"},"small_fast":{"label":"4 KB, 0 ms delay","desc":"small JSON-ish payload, instant backend"},"typical":{"label":"4 KB, 20 ms delay","desc":"typical API call"},"large_nodelay":{"label":"256 KB, 0 ms delay","desc":"large payload, instant backend"},"slow_large":{"label":"64 KB, 100 ms delay","desc":"slow backend, medium payload"},"huge_body":{"label":"2 MB, 0 ms delay","desc":"large transfer, backend-bound throughput"}},"vus":{"fast_small":[{"sweep":"vus","profile":"fast_small","param":1,"client":"native","req_per_sec":606.0409726890955,"http_avg_ms":1.5918739551253858,"http_p95_ms":1.952,"client_avg_ms":1.4344593048834122,"client_p95_ms":1.692,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":1,"client":"wreq","req_per_sec":3252.220918759076,"http_avg_ms":0.27991005247622264,"http_p95_ms":0.365,"client_avg_ms":0.21401254509675116,"client_p95_ms":0.28,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":10,"client":"native","req_per_sec":5468.310992814905,"http_avg_ms":1.8007669896995138,"http_p95_ms":2.235,"client_avg_ms":1.5557929664167538,"client_p95_ms":1.949,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":10,"client":"wreq","req_per_sec":21625.851745529602,"http_avg_ms":0.43602116221074433,"http_p95_ms":0.624,"client_avg_ms":0.2969643710368936,"client_p95_ms":0.442,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":50,"client":"native","req_per_sec":19645.231077862096,"http_avg_ms":2.5177223247670946,"http_p95_ms":4.453,"client_avg_ms":1.7297061603816388,"client_p95_ms":2.551,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":50,"client":"wreq","req_per_sec":24948.28715167611,"http_avg_ms":1.9684398419297564,"http_p95_ms":2.6778499999999834,"client_avg_ms":1.1928704497359999,"client_p95_ms":1.653,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":100,"client":"native","req_per_sec":19105.846541798986,"http_avg_ms":5.205089601908842,"http_p95_ms":8.516,"client_avg_ms":3.374793259101135,"client_p95_ms":6.338,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":100,"client":"wreq","req_per_sec":24987.42263956871,"http_avg_ms":3.9598383872603296,"http_p95_ms":5.235,"client_avg_ms":2.3315250366774682,"client_p95_ms":3.147,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":250,"client":"native","req_per_sec":17931.317242606165,"http_avg_ms":13.893784579041949,"http_p95_ms":17.566,"client_avg_ms":8.277300374028334,"client_p95_ms":11.892499999999988,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":250,"client":"wreq","req_per_sec":24149.45361458936,"http_avg_ms":10.28630888077751,"http_p95_ms":14.525399999999967,"client_avg_ms":5.358117122858761,"client_p95_ms":7.544,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":500,"client":"native","req_per_sec":16793.844234622837,"http_avg_ms":28.96736782238089,"http_p95_ms":35.21,"client_avg_ms":17.00611615422758,"client_p95_ms":22.864,"error_rate":0},{"sweep":"vus","profile":"fast_small","param":500,"client":"wreq","req_per_sec":23514.520997341246,"http_avg_ms":20.803376032601403,"http_p95_ms":27.965,"client_avg_ms":11.310677986933609,"client_p95_ms":17.149,"error_rate":0}],"huge_body":[{"sweep":"vus","profile":"huge_body","param":1,"client":"native","req_per_sec":358.492345708474,"http_avg_ms":2.7151494979546227,"http_p95_ms":3.56,"client_avg_ms":1.986432316846414,"client_p95_ms":2.5091499999999995,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":1,"client":"wreq","req_per_sec":756.5624745012648,"http_avg_ms":1.2610377125737988,"http_p95_ms":1.762,"client_avg_ms":0.6684992510353334,"client_p95_ms":0.942,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":10,"client":"native","req_per_sec":779.9834450046051,"http_avg_ms":12.747938418175625,"http_p95_ms":15.077549999999997,"client_avg_ms":8.030899470447551,"client_p95_ms":10.782599999999999,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":10,"client":"wreq","req_per_sec":2031.7088948514001,"http_avg_ms":4.849958076367915,"http_p95_ms":6.207,"client_avg_ms":2.8838309276997878,"client_p95_ms":4.551,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":50,"client":"native","req_per_sec":761.8969967049533,"http_avg_ms":65.43328784313725,"http_p95_ms":71.8719,"client_avg_ms":38.83718300653595,"client_p95_ms":44.29449999999999,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":50,"client":"wreq","req_per_sec":2158.6894373140913,"http_avg_ms":23.0732226916673,"http_p95_ms":26.197,"client_avg_ms":11.863414235489994,"client_p95_ms":15.672749999999999,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":100,"client":"native","req_per_sec":790.8496520307807,"http_avg_ms":125.90736420630297,"http_p95_ms":140.4818,"client_avg_ms":74.35879252695823,"client_p95_ms":85.8055,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":100,"client":"wreq","req_per_sec":2187.3230856286164,"http_avg_ms":45.57894960945789,"http_p95_ms":50.241899999999994,"client_avg_ms":23.33855010181436,"client_p95_ms":29.642,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":250,"client":"native","req_per_sec":432.7764589501091,"http_avg_ms":568.7818369877515,"http_p95_ms":1069.2105999999999,"client_avg_ms":267.75023332829187,"client_p95_ms":665.252,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":250,"client":"wreq","req_per_sec":1814.477856769646,"http_avg_ms":136.7195006547831,"http_p95_ms":148.3696,"client_avg_ms":89.64617289923588,"client_p95_ms":122.92924999999998,"error_rate":0},{"sweep":"vus","profile":"huge_body","param":500,"client":"native","req_per_sec":730.3153088510119,"http_avg_ms":460.90528125549514,"http_p95_ms":423.40664999999996,"client_avg_ms":178.09698474515397,"client_p95_ms":242.99665,"error_rate":0.020221557939159487},{"sweep":"vus","profile":"huge_body","param":500,"client":"wreq","req_per_sec":1918.956588224808,"http_avg_ms":228.95652243611772,"http_p95_ms":226.61704999999998,"client_avg_ms":84.482158958348,"client_p95_ms":122.45099999999998,"error_rate":0.0016441734603000616}],"large_nodelay":[{"sweep":"vus","profile":"large_nodelay","param":1,"client":"native","req_per_sec":514.562299735506,"http_avg_ms":1.8692462754242796,"http_p95_ms":2.67,"client_avg_ms":1.5823183054799839,"client_p95_ms":2.0681,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":1,"client":"wreq","req_per_sec":1885.4217936279783,"http_avg_ms":0.48731475850364475,"http_p95_ms":0.655,"client_avg_ms":0.3434711477264667,"client_p95_ms":0.449,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":10,"client":"native","req_per_sec":3788.0027582317857,"http_avg_ms":2.5961563638283187,"http_p95_ms":3.55,"client_avg_ms":1.8784273522321404,"client_p95_ms":3.013,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":10,"client":"wreq","req_per_sec":8915.485670121963,"http_avg_ms":1.0788585506639405,"http_p95_ms":2.005,"client_avg_ms":0.6603431929656727,"client_p95_ms":1.246,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":50,"client":"native","req_per_sec":4767.218541038559,"http_avg_ms":10.438612076315568,"http_p95_ms":12.259799999999997,"client_avg_ms":6.417796016493114,"client_p95_ms":9.222,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":50,"client":"wreq","req_per_sec":9848.08204126936,"http_avg_ms":5.023241625272437,"http_p95_ms":6.632,"client_avg_ms":2.675853004074021,"client_p95_ms":4.286,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":100,"client":"native","req_per_sec":4707.670481442633,"http_avg_ms":21.1839823494471,"http_p95_ms":23.325749999999996,"client_avg_ms":12.137477328656752,"client_p95_ms":16.561,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":100,"client":"wreq","req_per_sec":9509.378560478763,"http_avg_ms":10.457958340923472,"http_p95_ms":12.567,"client_avg_ms":5.374433314650067,"client_p95_ms":7.851,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":250,"client":"native","req_per_sec":4342.277737149483,"http_avg_ms":57.08238083726075,"http_p95_ms":61.263,"client_avg_ms":30.635440648142627,"client_p95_ms":37.802,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":250,"client":"wreq","req_per_sec":8990.193931592474,"http_avg_ms":27.703425424958738,"http_p95_ms":31.511,"client_avg_ms":13.67793450159906,"client_p95_ms":16.736449999999994,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":500,"client":"native","req_per_sec":4092.044065333868,"http_avg_ms":108.80225320102882,"http_p95_ms":157.2696,"client_avg_ms":50.931921346131936,"client_p95_ms":72.0474,"error_rate":0},{"sweep":"vus","profile":"large_nodelay","param":500,"client":"wreq","req_per_sec":6929.820244296454,"http_avg_ms":68.93069947670111,"http_p95_ms":104.32789999999997,"client_avg_ms":33.1624669248021,"client_p95_ms":51.14789999999997,"error_rate":0.000057505415093254615}],"slow_large":[{"sweep":"vus","profile":"slow_large","param":1,"client":"native","req_per_sec":9.390369862693479,"http_avg_ms":106.11208510638292,"http_p95_ms":109.352,"client_avg_ms":105.16426241134751,"client_p95_ms":107.587,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":1,"client":"wreq","req_per_sec":9.436370883399816,"http_avg_ms":105.66030985915486,"http_p95_ms":111.37955000000001,"client_avg_ms":104.61415492957745,"client_p95_ms":109.5217,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":10,"client":"native","req_per_sec":91.06071226298387,"http_avg_ms":109.55564218181811,"http_p95_ms":118.2652,"client_avg_ms":106.6003738181818,"client_p95_ms":113.49249999999999,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":10,"client":"wreq","req_per_sec":91.85604320908273,"http_avg_ms":108.5823173913042,"http_p95_ms":117.1766,"client_avg_ms":106.82658695652165,"client_p95_ms":114.28739999999999,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":50,"client":"native","req_per_sec":420.30937550035844,"http_avg_ms":118.80098866141724,"http_p95_ms":127.023,"client_avg_ms":113.90117417322752,"client_p95_ms":122.68565,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":50,"client":"wreq","req_per_sec":451.57982690721235,"http_avg_ms":110.5596200469618,"http_p95_ms":119.07085,"client_avg_ms":108.44302494863501,"client_p95_ms":116.91985,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":100,"client":"native","req_per_sec":862.7620006653228,"http_avg_ms":115.27578749520576,"http_p95_ms":126.28129999999999,"client_avg_ms":109.50008354430435,"client_p95_ms":118.89659999999999,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":100,"client":"wreq","req_per_sec":941.1226567615157,"http_avg_ms":105.54607007668976,"http_p95_ms":115.0638,"client_avg_ms":103.75419432913517,"client_p95_ms":111.7148,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":250,"client":"native","req_per_sec":2382.090903931715,"http_avg_ms":104.39645343600617,"http_p95_ms":109.275,"client_avg_ms":103.00884646391687,"client_p95_ms":106.05945,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":250,"client":"wreq","req_per_sec":2415.463424005978,"http_avg_ms":103.19674894259708,"http_p95_ms":107.273,"client_avg_ms":102.0645816533917,"client_p95_ms":105.08655,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":500,"client":"native","req_per_sec":4533.022066789023,"http_avg_ms":109.6136523936096,"http_p95_ms":132.79135,"client_avg_ms":106.02822138329914,"client_p95_ms":121.34535,"error_rate":0},{"sweep":"vus","profile":"slow_large","param":500,"client":"wreq","req_per_sec":4754.922684089796,"http_avg_ms":104.5398748868623,"http_p95_ms":114.9303,"client_avg_ms":102.6831252663087,"client_p95_ms":108.963,"error_rate":0}],"small_fast":[{"sweep":"vus","profile":"small_fast","param":1,"client":"native","req_per_sec":553.3897438434141,"http_avg_ms":1.7223676665461976,"http_p95_ms":2.301,"client_avg_ms":1.5030836043850153,"client_p95_ms":1.88,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":1,"client":"wreq","req_per_sec":3235.478545896623,"http_avg_ms":0.28223184225166564,"http_p95_ms":0.351,"client_avg_ms":0.21558483918158422,"client_p95_ms":0.269,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":10,"client":"native","req_per_sec":5394.529999374077,"http_avg_ms":1.820982552392237,"http_p95_ms":2.822,"client_avg_ms":1.5461057606761537,"client_p95_ms":2.289,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":10,"client":"wreq","req_per_sec":20628.318519194843,"http_avg_ms":0.45785094532248966,"http_p95_ms":0.621,"client_avg_ms":0.3094691849420461,"client_p95_ms":0.449,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":50,"client":"native","req_per_sec":17868.55621881786,"http_avg_ms":2.7669521519855658,"http_p95_ms":5.203,"client_avg_ms":1.8765243958847975,"client_p95_ms":3.17,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":50,"client":"wreq","req_per_sec":23816.500835643306,"http_avg_ms":2.063124841163668,"http_p95_ms":2.537,"client_avg_ms":1.255600328588323,"client_p95_ms":1.664,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":100,"client":"native","req_per_sec":18634.670326620348,"http_avg_ms":5.336569237481279,"http_p95_ms":8.391,"client_avg_ms":3.444018645467952,"client_p95_ms":5.971,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":100,"client":"wreq","req_per_sec":23546.16107039058,"http_avg_ms":4.205077497763471,"http_p95_ms":5.233,"client_avg_ms":2.4834400797200864,"client_p95_ms":3.360249999999984,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":250,"client":"native","req_per_sec":17065.95095764143,"http_avg_ms":14.592156259758458,"http_p95_ms":18.851,"client_avg_ms":8.671610951064807,"client_p95_ms":12.558,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":250,"client":"wreq","req_per_sec":22526.93411699244,"http_avg_ms":11.043416978503412,"http_p95_ms":15.404,"client_avg_ms":5.910918961931839,"client_p95_ms":8.525,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":500,"client":"native","req_per_sec":16208.167952237187,"http_avg_ms":29.969110970183298,"http_p95_ms":37.157,"client_avg_ms":17.478616137982794,"client_p95_ms":23.705849999999987,"error_rate":0},{"sweep":"vus","profile":"small_fast","param":500,"client":"wreq","req_per_sec":22857.37801868052,"http_avg_ms":21.593026872541973,"http_p95_ms":29.677,"client_avg_ms":12.032699300801363,"client_p95_ms":17.877,"error_rate":0}],"typical":[{"sweep":"vus","profile":"typical","param":1,"client":"native","req_per_sec":41.36881894220263,"http_avg_ms":23.978032206119153,"http_p95_ms":25.668,"client_avg_ms":23.559346215780984,"client_p95_ms":25.129,"error_rate":0},{"sweep":"vus","profile":"typical","param":1,"client":"wreq","req_per_sec":42.7512578658652,"http_avg_ms":23.193747663551406,"http_p95_ms":24.495,"client_avg_ms":22.79729595015577,"client_p95_ms":23.9817,"error_rate":0},{"sweep":"vus","profile":"typical","param":10,"client":"native","req_per_sec":399.5987082463509,"http_avg_ms":24.923442535446224,"http_p95_ms":27.758,"client_avg_ms":23.90265854879067,"client_p95_ms":26.257699999999996,"error_rate":0},{"sweep":"vus","profile":"typical","param":10,"client":"wreq","req_per_sec":408.2327786696177,"http_avg_ms":24.383586077600192,"http_p95_ms":27.292099999999998,"client_avg_ms":23.685600749918468,"client_p95_ms":26.208149999999996,"error_rate":0},{"sweep":"vus","profile":"typical","param":50,"client":"native","req_per_sec":2046.585256293055,"http_avg_ms":24.35067407070181,"http_p95_ms":27.5746,"client_avg_ms":23.198905427818797,"client_p95_ms":25.926,"error_rate":0},{"sweep":"vus","profile":"typical","param":50,"client":"wreq","req_per_sec":2032.7508057535113,"http_avg_ms":24.50072366267275,"http_p95_ms":28.08475,"client_avg_ms":23.510392882865318,"client_p95_ms":26.713749999999997,"error_rate":0},{"sweep":"vus","profile":"typical","param":100,"client":"native","req_per_sec":4248.146377754377,"http_avg_ms":23.48348224916987,"http_p95_ms":26.081299999999995,"client_avg_ms":22.572072476029014,"client_p95_ms":24.739649999999997,"error_rate":0},{"sweep":"vus","profile":"typical","param":100,"client":"wreq","req_per_sec":4228.028573117056,"http_avg_ms":23.571835056901218,"http_p95_ms":26.984,"client_avg_ms":22.50409412727656,"client_p95_ms":25.509,"error_rate":0},{"sweep":"vus","profile":"typical","param":250,"client":"native","req_per_sec":10632.993313772437,"http_avg_ms":23.400204603068637,"http_p95_ms":25.985899999999994,"client_avg_ms":22.431746042575632,"client_p95_ms":24.314,"error_rate":0},{"sweep":"vus","profile":"typical","param":250,"client":"wreq","req_per_sec":11022.197028037324,"http_avg_ms":22.610605791586988,"http_p95_ms":25.535,"client_avg_ms":21.598886112872965,"client_p95_ms":23.586,"error_rate":0},{"sweep":"vus","profile":"typical","param":500,"client":"native","req_per_sec":15809.096030960896,"http_avg_ms":31.53698488528208,"http_p95_ms":37.455,"client_avg_ms":27.379076495372832,"client_p95_ms":31.458,"error_rate":0},{"sweep":"vus","profile":"typical","param":500,"client":"wreq","req_per_sec":18957.302749077502,"http_avg_ms":26.296419693304454,"http_p95_ms":32.975,"client_avg_ms":23.408833023734186,"client_p95_ms":28.651,"error_rate":0}]},"rate":{"fast_small":[{"sweep":"rate","profile":"fast_small","param":50,"client":"native","req_per_sec":50.05704236598777,"http_avg_ms":3.155868175765647,"http_p95_ms":5.358999999999999,"client_avg_ms":2.4281198402130473,"client_p95_ms":3.8394999999999992,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":50,"client":"wreq","req_per_sec":50.05627498397999,"http_avg_ms":2.5988415446071906,"http_p95_ms":4.773999999999999,"client_avg_ms":1.8831970705725682,"client_p95_ms":3.3539999999999988,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":200,"client":"native","req_per_sec":199.98776074904217,"http_avg_ms":2.5153493333333317,"http_p95_ms":4.3485999999999985,"client_avg_ms":2.000943000000001,"client_p95_ms":3.2441999999999998,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":200,"client":"wreq","req_per_sec":199.99160035278518,"http_avg_ms":1.4016573333333335,"http_p95_ms":2.8311999999999995,"client_avg_ms":1.0052939999999995,"client_p95_ms":2.103,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":500,"client":"native","req_per_sec":499.98040338107,"http_avg_ms":1.9472421010531928,"http_p95_ms":3,"client_avg_ms":1.6160886548460236,"client_p95_ms":2.326,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":500,"client":"wreq","req_per_sec":500.0128319517599,"http_avg_ms":0.8602998266897728,"http_p95_ms":1.869,"client_avg_ms":0.6048129582722297,"client_p95_ms":1.35,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":1000,"client":"native","req_per_sec":999.8303734217479,"http_avg_ms":1.4470595293647064,"http_p95_ms":2.078,"client_avg_ms":1.2340573295113622,"client_p95_ms":1.626,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":1000,"client":"wreq","req_per_sec":999.891011879705,"http_avg_ms":0.5639391333333327,"http_p95_ms":0.706,"client_avg_ms":0.39962540000000074,"client_p95_ms":0.483,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":2000,"client":"native","req_per_sec":1999.5876987598904,"http_avg_ms":1.1802647911736326,"http_p95_ms":1.673,"client_avg_ms":1.0039122695910156,"client_p95_ms":1.307,"error_rate":0},{"sweep":"rate","profile":"fast_small","param":2000,"client":"wreq","req_per_sec":1999.7097754545891,"http_avg_ms":0.3190212666666677,"http_p95_ms":0.376,"client_avg_ms":0.23343586666666563,"client_p95_ms":0.271,"error_rate":0}],"huge_body":[{"sweep":"rate","profile":"huge_body","param":50,"client":"native","req_per_sec":49.99661022982642,"http_avg_ms":4.267871999999999,"http_p95_ms":6.4327999999999985,"client_avg_ms":2.8659759999999994,"client_p95_ms":4.167399999999996,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":50,"client":"wreq","req_per_sec":50.050590417024715,"http_avg_ms":3.1344314247669764,"http_p95_ms":4.936999999999997,"client_avg_ms":1.735406125166445,"client_p95_ms":2.5569999999999995,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":200,"client":"native","req_per_sec":200.01518275862458,"http_avg_ms":2.6584698433855354,"http_p95_ms":3.451,"client_avg_ms":1.9260883038986991,"client_p95_ms":2.456,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":200,"client":"wreq","req_per_sec":200.0266346695148,"http_avg_ms":1.9458893702099285,"http_p95_ms":2.724,"client_avg_ms":1.0279120293235586,"client_p95_ms":1.462,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":500,"client":"native","req_per_sec":499.9428731943563,"http_avg_ms":3.7628181333333313,"http_p95_ms":6.19205,"client_avg_ms":2.407634666666661,"client_p95_ms":4.146549999999996,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":500,"client":"wreq","req_per_sec":499.98043409901226,"http_avg_ms":1.7800719999999988,"http_p95_ms":2.5190999999999995,"client_avg_ms":0.9328682666666617,"client_p95_ms":1.4500999999999993,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":1000,"client":"native","req_per_sec":636.301672934161,"http_avg_ms":1018.8275612590788,"http_p95_ms":1779.33735,"client_avg_ms":597.7729370860931,"client_p95_ms":1124.36015,"error_rate":0.14689265536723164},{"sweep":"rate","profile":"huge_body","param":1000,"client":"wreq","req_per_sec":999.93953698933,"http_avg_ms":1.6482794666666647,"http_p95_ms":3.2981999999999974,"client_avg_ms":0.9267884000000016,"client_p95_ms":1.925,"error_rate":0},{"sweep":"rate","profile":"huge_body","param":2000,"client":"native","req_per_sec":885.9116611589718,"http_avg_ms":631.7024110343358,"http_p95_ms":1557.42975,"client_avg_ms":557.23517933373,"client_p95_ms":1023.6135,"error_rate":0.45875620816238394},{"sweep":"rate","profile":"huge_body","param":2000,"client":"wreq","req_per_sec":855.1808191688174,"http_avg_ms":1545.937460764277,"http_p95_ms":3615.343,"client_avg_ms":1033.8792428783524,"client_p95_ms":2353.946,"error_rate":0.2584263773129947}],"large_nodelay":[{"sweep":"rate","profile":"large_nodelay","param":50,"client":"native","req_per_sec":49.99656023665572,"http_avg_ms":3.6910293333333373,"http_p95_ms":7.0666999999999955,"client_avg_ms":2.782799999999999,"client_p95_ms":5.206449999999997,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":50,"client":"wreq","req_per_sec":49.995757026753665,"http_avg_ms":2.940759999999999,"http_p95_ms":5.426599999999997,"client_avg_ms":2.1048106666666637,"client_p95_ms":3.8931499999999977,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":200,"client":"native","req_per_sec":200.01799562106552,"http_avg_ms":2.3560263245584823,"http_p95_ms":3.774,"client_avg_ms":1.8453928690436534,"client_p95_ms":2.792,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":200,"client":"wreq","req_per_sec":199.98652090849077,"http_avg_ms":1.5404000000000004,"http_p95_ms":2.87105,"client_avg_ms":1.0617003333333332,"client_p95_ms":2.09515,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":500,"client":"native","req_per_sec":499.98286953773214,"http_avg_ms":1.774408745500596,"http_p95_ms":2.443,"client_avg_ms":1.4362655645913915,"client_p95_ms":1.939,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":500,"client":"wreq","req_per_sec":500.00406615758374,"http_avg_ms":1.0119112118384204,"http_p95_ms":1.421,"client_avg_ms":0.6510711905079293,"client_p95_ms":0.92,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":1000,"client":"native","req_per_sec":999.8812886757462,"http_avg_ms":1.4387333511099298,"http_p95_ms":2.009,"client_avg_ms":1.191942937137528,"client_p95_ms":1.624,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":1000,"client":"wreq","req_per_sec":999.9353375148406,"http_avg_ms":0.6746799333333264,"http_p95_ms":1.0590999999999986,"client_avg_ms":0.4462567999999992,"client_p95_ms":0.629,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":2000,"client":"native","req_per_sec":1999.7000549899185,"http_avg_ms":1.4523079897336861,"http_p95_ms":2.248,"client_avg_ms":1.156823805873136,"client_p95_ms":1.773,"error_rate":0},{"sweep":"rate","profile":"large_nodelay","param":2000,"client":"wreq","req_per_sec":1999.7307029320052,"http_avg_ms":0.4705393666666631,"http_p95_ms":0.855,"client_avg_ms":0.32194786666667347,"client_p95_ms":0.511,"error_rate":0}],"slow_large":[{"sweep":"rate","profile":"slow_large","param":50,"client":"native","req_per_sec":49.72200097773342,"http_avg_ms":103.48026666666652,"http_p95_ms":107.33024999999999,"client_avg_ms":102.7991413333333,"client_p95_ms":105.95665,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":50,"client":"wreq","req_per_sec":49.72470744468375,"http_avg_ms":102.18315866666666,"http_p95_ms":105.09655,"client_avg_ms":101.65077599999972,"client_p95_ms":104.32164999999999,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":200,"client":"native","req_per_sec":198.69508772245774,"http_avg_ms":102.43049283572125,"http_p95_ms":104.511,"client_avg_ms":101.99122692435853,"client_p95_ms":103.709,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":200,"client":"wreq","req_per_sec":198.7126124305499,"http_avg_ms":101.13241486171297,"http_p95_ms":102.83,"client_avg_ms":100.82124058647105,"client_p95_ms":102.298,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":500,"client":"native","req_per_sec":496.70288624113135,"http_avg_ms":101.56928706666656,"http_p95_ms":102.707,"client_avg_ms":101.33096133333324,"client_p95_ms":102.42805,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":500,"client":"wreq","req_per_sec":496.6998364949692,"http_avg_ms":100.72678549526688,"http_p95_ms":101.093,"client_avg_ms":100.48545167311056,"client_p95_ms":100.77,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":1000,"client":"native","req_per_sec":993.1656222350457,"http_avg_ms":101.56025191653923,"http_p95_ms":101.982,"client_avg_ms":101.32647330178042,"client_p95_ms":101.629,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":1000,"client":"wreq","req_per_sec":993.3542409425377,"http_avg_ms":100.63728084794371,"http_p95_ms":101.697,"client_avg_ms":100.40256556229627,"client_p95_ms":101.422,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":2000,"client":"native","req_per_sec":1986.3134324603116,"http_avg_ms":101.27896226792403,"http_p95_ms":102.074,"client_avg_ms":101.07181567281116,"client_p95_ms":101.706,"error_rate":0},{"sweep":"rate","profile":"slow_large","param":2000,"client":"wreq","req_per_sec":1986.5796450179964,"http_avg_ms":100.26479644011867,"http_p95_ms":100.886,"client_avg_ms":100.11591973600889,"client_p95_ms":100.598,"error_rate":0}],"small_fast":[{"sweep":"rate","profile":"small_fast","param":50,"client":"native","req_per_sec":50.05077054194255,"http_avg_ms":3.0799121171771,"http_p95_ms":5.3629999999999995,"client_avg_ms":2.3731171770972077,"client_p95_ms":3.754,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":50,"client":"wreq","req_per_sec":49.99562038365439,"http_avg_ms":2.299622666666668,"http_p95_ms":3.932,"client_avg_ms":1.6644106666666667,"client_p95_ms":2.90755,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":200,"client":"native","req_per_sec":200.00990385595233,"http_avg_ms":2.4483642119293587,"http_p95_ms":4.146,"client_avg_ms":1.9374158613795358,"client_p95_ms":3.052,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":200,"client":"wreq","req_per_sec":200.02606137620728,"http_avg_ms":1.4278510496501193,"http_p95_ms":2.867,"client_avg_ms":1.0136341219593457,"client_p95_ms":2.103,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":500,"client":"native","req_per_sec":499.9618080101334,"http_avg_ms":1.8656665777896284,"http_p95_ms":3.419,"client_avg_ms":1.5215928542860957,"client_p95_ms":2.636,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":500,"client":"wreq","req_per_sec":500.00059992073045,"http_avg_ms":0.879306359152113,"http_p95_ms":1.796,"client_avg_ms":0.6178641514464717,"client_p95_ms":1.302,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":1000,"client":"native","req_per_sec":999.848756211477,"http_avg_ms":1.436603466666664,"http_p95_ms":2.071099999999999,"client_avg_ms":1.225212000000004,"client_p95_ms":1.604,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":1000,"client":"wreq","req_per_sec":999.9024761784901,"http_avg_ms":0.5882934,"http_p95_ms":0.7630499999999993,"client_avg_ms":0.40656060000000044,"client_p95_ms":0.496,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":2000,"client":"native","req_per_sec":1999.684860170698,"http_avg_ms":1.1698980033998827,"http_p95_ms":1.629,"client_avg_ms":0.9945841805273233,"client_p95_ms":1.278,"error_rate":0},{"sweep":"rate","profile":"small_fast","param":2000,"client":"wreq","req_per_sec":1999.8052254635245,"http_avg_ms":0.34475950801639965,"http_p95_ms":0.398,"client_avg_ms":0.24482823905869905,"client_p95_ms":0.276,"error_rate":0}],"typical":[{"sweep":"rate","profile":"typical","param":50,"client":"native","req_per_sec":49.973349764872395,"http_avg_ms":23.275938748335523,"http_p95_ms":26.584999999999997,"client_avg_ms":22.631846870838867,"client_p95_ms":25.245499999999996,"error_rate":0},{"sweep":"rate","profile":"typical","param":50,"client":"wreq","req_per_sec":49.97158406794112,"http_avg_ms":22.416958721704386,"http_p95_ms":26.109999999999996,"client_avg_ms":21.873625832223713,"client_p95_ms":24.5735,"error_rate":0},{"sweep":"rate","profile":"typical","param":200,"client":"native","req_per_sec":199.73329847595707,"http_avg_ms":22.911659113628797,"http_p95_ms":25.719,"client_avg_ms":22.34052282572474,"client_p95_ms":24.685,"error_rate":0},{"sweep":"rate","profile":"typical","param":200,"client":"wreq","req_per_sec":199.77437012658876,"http_avg_ms":21.890994335221553,"http_p95_ms":24.247,"client_avg_ms":21.445194935021643,"client_p95_ms":23.38,"error_rate":0},{"sweep":"rate","profile":"typical","param":500,"client":"native","req_per_sec":499.3335119155714,"http_avg_ms":21.97607279029461,"http_p95_ms":23.738,"client_avg_ms":21.6514472736968,"client_p95_ms":23.133,"error_rate":0},{"sweep":"rate","profile":"typical","param":500,"client":"wreq","req_per_sec":499.315762335549,"http_avg_ms":20.741343154246092,"http_p95_ms":21.651,"client_avg_ms":20.516253966137842,"client_p95_ms":21.405,"error_rate":0},{"sweep":"rate","profile":"typical","param":1000,"client":"native","req_per_sec":998.6274447932307,"http_avg_ms":21.482332177854826,"http_p95_ms":22.454,"client_avg_ms":21.281394307046323,"client_p95_ms":22.095,"error_rate":0},{"sweep":"rate","profile":"typical","param":1000,"client":"wreq","req_per_sec":998.6603969435399,"http_avg_ms":20.518010866666724,"http_p95_ms":20.65,"client_avg_ms":20.37369266666684,"client_p95_ms":20.482,"error_rate":0},{"sweep":"rate","profile":"typical","param":2000,"client":"native","req_per_sec":1997.1024705954953,"http_avg_ms":21.190950533333307,"http_p95_ms":21.857,"client_avg_ms":21.028289566666636,"client_p95_ms":21.39005,"error_rate":0},{"sweep":"rate","profile":"typical","param":2000,"client":"wreq","req_per_sec":1997.109117981418,"http_avg_ms":20.203750599999978,"http_p95_ms":20.56705,"client_avg_ms":20.0860530000001,"client_p95_ms":20.41,"error_rate":0}]},"cold":{"native":[138,107,109.1,107.7,107.8,107.7,109.3,110.8,106.2,108.5,107.6,104.2,107.5,105.6,106.9,109.7,111.8,108.5,106.6,109.6,104.1,107.4,109.2,104.1,107.4,108.8,105.7,106.6,105.2,104.3,107.1,108,102.9,107,102.8,106.3,111.2,110.1,112.1,106.4,104.2,106.6,111.3,104.8,111.4,107.2,107.7,102.1,109.4,105.8],"wreq":[83.4,70.9,62.8,60.8,63,57.5,63,65,69.1,58.3,64.1,65.5,59.6,64.8,62.4,60.8,64.4,65.4,61.4,60.5,63.3,62.9,59.7,60,61.8,61.6,62,61.3,62.6,61.1,63.4,63.7,67.2,59.7,65.1,62.1,61.7,58.8,66.3,66.6,60.8,64.7,60.3,58.3,63.6,67.8,59.8,64,62.4,66.1]}}
+</script>
 <script>
-(function () {
-  const DATA = JSON.parse(document.getElementById('report-data').textContent);
-  const tooltip = document.getElementById('tooltip');
-  const SVGNS = 'http://www.w3.org/2000/svg';
+  ;(function () {
+    const DATA = JSON.parse(document.getElementById('report-data').textContent)
+    const tooltip = document.getElementById('tooltip')
+    const SVGNS = 'http://www.w3.org/2000/svg'
 
-  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const cssVar = (name) =>
+      getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 
-  function el(tag, attrs, parent) {
-    const e = document.createElementNS(SVGNS, tag);
-    for (const k in attrs) e.setAttribute(k, attrs[k]);
-    if (parent) parent.appendChild(e);
-    return e;
-  }
-
-  function niceNum(range, round) {
-    const exp = Math.floor(Math.log10(range));
-    const frac = range / Math.pow(10, exp);
-    let niceFrac;
-    if (round) {
-      if (frac < 1.5) niceFrac = 1; else if (frac < 3) niceFrac = 2; else if (frac < 7) niceFrac = 5; else niceFrac = 10;
-    } else {
-      if (frac <= 1) niceFrac = 1; else if (frac <= 2) niceFrac = 2; else if (frac <= 5) niceFrac = 5; else niceFrac = 10;
+    function el(tag, attrs, parent) {
+      const e = document.createElementNS(SVGNS, tag)
+      for (const k in attrs) e.setAttribute(k, attrs[k])
+      if (parent) parent.appendChild(e)
+      return e
     }
-    return niceFrac * Math.pow(10, exp);
-  }
 
-  function linearTicks(min, max, count) {
-    if (min === max) { min = 0; }
-    const range = niceNum(max - min || max || 1, false);
-    const step = niceNum(range / (count - 1), true);
-    const niceMin = Math.floor(min / step) * step;
-    const niceMax = Math.ceil(max / step) * step;
-    const ticks = [];
-    for (let v = niceMin; v <= niceMax + step * 0.5; v += step) ticks.push(Math.round(v * 1000) / 1000);
-    return ticks;
-  }
-
-  function logTicks(min, max) {
-    const lo = Math.floor(Math.log10(min));
-    const hi = Math.ceil(Math.log10(max));
-    const ticks = [];
-    for (let e = lo; e <= hi; e++) {
-      for (const m of [1, 2, 5]) {
-        const v = m * Math.pow(10, e);
-        if (v >= min * 0.98 && v <= max * 1.02) ticks.push(v);
+    function niceNum(range, round) {
+      const exp = Math.floor(Math.log10(range))
+      const frac = range / Math.pow(10, exp)
+      let niceFrac
+      if (round) {
+        if (frac < 1.5) niceFrac = 1
+        else if (frac < 3) niceFrac = 2
+        else if (frac < 7) niceFrac = 5
+        else niceFrac = 10
+      } else {
+        if (frac <= 1) niceFrac = 1
+        else if (frac <= 2) niceFrac = 2
+        else if (frac <= 5) niceFrac = 5
+        else niceFrac = 10
       }
-    }
-    if (ticks.length < 2) return [min, max];
-    return ticks;
-  }
-
-  function fmtNum(v) {
-    if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'k';
-    if (v >= 100) return Math.round(v).toString();
-    if (v >= 10) return v.toFixed(1);
-    if (v >= 1) return v.toFixed(2);
-    return v.toFixed(3);
-  }
-
-  function seriesFor(rows, key) {
-    const out = { native: [], wreq: [] };
-    for (const r of rows) out[r.client].push({ x: r.param, y: r[key], row: r });
-    return out;
-  }
-
-  // ---- generic small-multiple line chart ----
-  function lineChart(svg, opts) {
-    const W = 300, H = 190;
-    const M = { l: 34, r: 26, t: 10, b: 22 };
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    const plotW = W - M.l - M.r, plotH = H - M.t - M.b;
-
-    const xs = opts.series.native.map(p => p.x);
-    const xMin = Math.min(...xs), xMax = Math.max(...xs);
-    const allY = [...opts.series.native, ...opts.series.wreq].map(p => p.y).filter(v => v > 0);
-    let yMin = Math.min(...allY), yMax = Math.max(...allY);
-    if (opts.yScale === 'log') {
-      yMin = Math.max(yMin * 0.85, yMin - 0.001);
-      yMax = yMax * 1.15;
-    } else {
-      const pad = (yMax - yMin) * 0.12 || yMax * 0.1 || 1;
-      yMin = Math.max(0, yMin - pad);
-      yMax = yMax + pad;
+      return niceFrac * Math.pow(10, exp)
     }
 
-    const xPix = (v) => M.l + (Math.log10(v) - Math.log10(xMin)) / (Math.log10(xMax) - Math.log10(xMin) || 1) * plotW;
-    const yPix = opts.yScale === 'log'
-      ? (v) => M.t + plotH - (Math.log10(v) - Math.log10(yMin)) / (Math.log10(yMax) - Math.log10(yMin) || 1) * plotH
-      : (v) => M.t + plotH - (v - yMin) / (yMax - yMin || 1) * plotH;
-
-    // gridlines (y)
-    const yTicks = opts.yScale === 'log' ? logTicks(yMin, yMax) : linearTicks(yMin, yMax, 4);
-    for (const t of yTicks) {
-      const y = yPix(t);
-      el('line', { x1: M.l, x2: W - M.r, y1: y, y2: y, class: 'grid-line' }, svg);
-      el('text', { x: M.l - 6, y: y + 3, 'text-anchor': 'end', class: 'axis-label' }, svg).textContent = fmtNum(t);
-    }
-    // x ticks (actual data points)
-    for (const v of xs.filter((v, i) => xs.indexOf(v) === i)) {
-      const x = xPix(v);
-      el('text', { x, y: H - 4, 'text-anchor': 'middle', class: 'axis-label' }, svg).textContent = fmtNum(v);
-    }
-    el('line', { x1: M.l, x2: W - M.r, y1: M.t + plotH, y2: M.t + plotH, class: 'base-line' }, svg);
-
-    // optional reference diagonal (target = achieved)
-    if (opts.refDiagonal) {
-      const p1x = xPix(xMin), p1y = yPix(Math.max(yMin, xMin));
-      const p2x = xPix(xMax), p2y = yPix(Math.min(yMax, xMax));
-      el('line', { x1: p1x, y1: p1y, x2: p2x, y2: p2y, class: 'ref-line' }, svg);
-    }
-
-    const colors = { native: cssVar('--native'), wreq: cssVar('--wreq') };
-    const dash = { native: 'none', wreq: '5 3' };
-    const points = { native: [], wreq: [] };
-    const ends = [];
-
-    for (const client of ['native', 'wreq']) {
-      const pts = opts.series[client].filter(p => p.y > 0);
-      const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xPix(p.x)} ${yPix(p.y)}`).join(' ');
-      el('path', { d, fill: 'none', stroke: colors[client], 'stroke-width': 2, 'stroke-dasharray': dash[client], 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
-      for (const p of pts) {
-        const dot = el('circle', { cx: xPix(p.x), cy: yPix(p.y), r: 3, fill: colors[client], stroke: cssVar('--surface'), 'stroke-width': 1.5 }, svg);
-        points[client].push({ el: dot, px: xPix(p.x), py: yPix(p.y), data: p, client });
+    function linearTicks(min, max, count) {
+      if (min === max) {
+        min = 0
       }
-      if (pts.length) {
-        const last = pts[pts.length - 1];
-        ends.push({ client, x: xPix(last.x), y: yPix(last.y), text: fmtNum(last.y) });
-      }
+      const range = niceNum(max - min || max || 1, false)
+      const step = niceNum(range / (count - 1), true)
+      const niceMin = Math.floor(min / step) * step
+      const niceMax = Math.ceil(max / step) * step
+      const ticks = []
+      for (let v = niceMin; v <= niceMax + step * 0.5; v += step)
+        ticks.push(Math.round(v * 1000) / 1000)
+      return ticks
     }
 
-    // end labels: nudge apart vertically when the two series converge
-    if (ends.length === 2) {
-      const minGap = 12;
-      const gap = ends[0].y - ends[1].y;
-      if (Math.abs(gap) < minGap) {
-        const mid = (ends[0].y + ends[1].y) / 2;
-        const [top, bottom] = ends[0].y <= ends[1].y ? [ends[0], ends[1]] : [ends[1], ends[0]];
-        top.y = mid - minGap / 2;
-        bottom.y = mid + minGap / 2;
-      }
-    }
-    for (const e of ends) {
-      el('text', { x: Math.min(e.x + 6, W - M.r + 20), y: e.y + 3, class: 'end-label', fill: colors[e.client] }, svg).textContent = e.text;
-    }
-
-    attachHover(svg, [...points.native, ...points.wreq], M, plotW, plotH, opts.unit);
-  }
-
-  function attachHover(svg, allPoints, M, plotW, plotH, unit) {
-    const hitW = svg.viewBox.baseVal.width;
-    const overlay = el('rect', { x: M.l, y: M.t, width: plotW, height: plotH, fill: 'transparent' }, svg);
-    const cross = el('line', { class: 'crosshair', y1: M.t, y2: M.t + plotH }, svg);
-    overlay.addEventListener('pointermove', (ev) => {
-      const rect = svg.getBoundingClientRect();
-      const scale = hitW / rect.width;
-      const px = (ev.clientX - rect.left) * scale;
-      let nearest = null, bestDist = Infinity;
-      const byX = new Map();
-      for (const p of allPoints) {
-        const dist = Math.abs(p.px - px);
-        if (dist < bestDist) { bestDist = dist; nearest = p; }
-      }
-      if (!nearest) return;
-      const sameX = allPoints.filter(p => p.px === nearest.px);
-      cross.setAttribute('x1', nearest.px); cross.setAttribute('x2', nearest.px);
-      cross.setAttribute('opacity', 1);
-      tooltip.innerHTML = '';
-      const xRow = document.createElement('div');
-      xRow.className = 'x';
-      xRow.textContent = 'x = ' + fmtNum(nearest.data.x);
-      tooltip.appendChild(xRow);
-      for (const p of sameX.sort((a, b) => a.client === 'native' ? -1 : 1)) {
-        const row = document.createElement('div');
-        row.className = 'row';
-        const key = document.createElement('span');
-        key.className = 'key';
-        key.style.background = p.client === 'native' ? cssVar('--native') : cssVar('--wreq');
-        const label = document.createElement('span');
-        label.textContent = p.client === 'native' ? 'native' : 'wreq';
-        const val = document.createElement('span');
-        val.className = 'val';
-        val.textContent = fmtNum(p.data.y) + (unit || '');
-        row.appendChild(key); row.appendChild(label); row.appendChild(val);
-        tooltip.appendChild(row);
-      }
-      const rect2 = svg.getBoundingClientRect();
-      tooltip.style.left = (rect2.left + nearest.px / scale + window.scrollX) + 'px';
-      tooltip.style.top = (rect2.top + nearest.py / scale + window.scrollY - 10) + 'px';
-      tooltip.classList.add('show');
-    });
-    overlay.addEventListener('pointerleave', () => { tooltip.classList.remove('show'); cross.setAttribute('opacity', 0); });
-  }
-
-  function buildGrid(containerId, sweepKey, metricKey, yScale, opts) {
-    const container = document.getElementById(containerId);
-    const order = ['fast_small', 'small_fast', 'typical', 'large_nodelay', 'slow_large', 'huge_body'];
-    for (const profile of order) {
-      const rows = DATA[sweepKey][profile];
-      if (!rows) continue;
-      const meta = DATA.profileMeta[profile];
-      const panel = document.createElement('div');
-      panel.className = 'panel' + (profile === 'huge_body' ? ' featured' : '');
-      const hasErr = rows.some(r => r.error_rate > 0.001);
-      panel.innerHTML = `<div class="ptitle">${profile.replace(/_/g, ' ')}</div><div class="psub">${meta.label}</div>` +
-        (hasErr ? `<div class="badge">errors</div>` : '');
-      const svg = el('svg', {});
-      panel.appendChild(svg);
-      container.appendChild(panel);
-      lineChart(svg, { series: seriesFor(rows, metricKey), yScale, refDiagonal: !!opts.refDiagonal, unit: opts.unit });
-    }
-  }
-
-  buildGrid('grid-vus-throughput', 'vus', 'req_per_sec', 'linear', { unit: '/s' });
-  buildGrid('grid-vus-latency', 'vus', 'client_p95_ms', 'log', { unit: 'ms' });
-  buildGrid('grid-rate-throughput', 'rate', 'req_per_sec', 'linear', { refDiagonal: true, unit: '/s' });
-  buildGrid('grid-rate-latency', 'rate', 'client_p95_ms', 'log', { unit: 'ms' });
-
-  // ---- hero grouped-bar chart: huge_body rate sweep ----
-  (function heroChart() {
-    const svg = document.getElementById('hero-chart');
-    const rows = DATA.rate.huge_body;
-    const rates = [...new Set(rows.map(r => r.param))].sort((a, b) => a - b);
-    const W = 1100, H = 360, M = { l: 56, r: 20, t: 20, b: 66 };
-    const plotW = W - M.l - M.r, plotH = H - M.t - M.b;
-    const maxY = Math.max(...rows.map(r => r.req_per_sec), ...rates) * 1.08;
-    const yPix = (v) => M.t + plotH - (v / maxY) * plotH;
-    const groupW = plotW / rates.length;
-    const barW = 34, gap = 8;
-    const colors = { native: cssVar('--native'), wreq: cssVar('--wreq') };
-
-    const yTicks = linearTicks(0, maxY, 5);
-    for (const t of yTicks) {
-      const y = yPix(t);
-      el('line', { x1: M.l, x2: W - M.r, y1: y, y2: y, class: 'grid-line' }, svg);
-      el('text', { x: M.l - 8, y: y + 4, 'text-anchor': 'end', class: 'axis-label' }, svg).textContent = fmtNum(t);
-    }
-    el('line', { x1: M.l, x2: W - M.r, y1: yPix(0), y2: yPix(0), class: 'base-line' }, svg);
-
-    rates.forEach((rate, i) => {
-      const cx = M.l + groupW * (i + 0.5);
-      const rowN = rows.find(r => r.param === rate && r.client === 'native');
-      const rowW = rows.find(r => r.param === rate && r.client === 'wreq');
-      const bars = [
-        { row: rowN, client: 'native', x: cx - gap / 2 - barW },
-        { row: rowW, client: 'wreq', x: cx + gap / 2 },
-      ];
-      for (const b of bars) {
-        const y = yPix(b.row.req_per_sec);
-        const rect = el('rect', {
-          x: b.x, y, width: barW, height: yPix(0) - y, rx: 4, ry: 4,
-          fill: colors[b.client],
-        }, svg);
-        const label = el('text', { x: b.x + barW / 2, y: y - 6, 'text-anchor': 'middle', class: 'end-label', fill: colors[b.client] }, svg);
-        label.textContent = fmtNum(Math.round(b.row.req_per_sec));
-        const hit = el('rect', { x: b.x, y: M.t, width: barW, height: plotH, fill: 'transparent' }, svg);
-        hit.addEventListener('pointerenter', (ev) => showBarTooltip(ev, svg, b));
-        hit.addEventListener('pointerleave', () => tooltip.classList.remove('show'));
-      }
-      // target tick — turns critical when either client misses it badly
-      const missed = bars.some(b => b.row.req_per_sec < rate * 0.9);
-      const ty = yPix(rate);
-      el('line', {
-        x1: cx - gap / 2 - barW - 4, x2: cx + gap / 2 + barW + 4, y1: ty, y2: ty,
-        class: missed ? '' : 'ref-line', stroke: missed ? cssVar('--critical') : cssVar('--muted'),
-        'stroke-width': 1, 'stroke-dasharray': '2 3',
-      }, svg);
-      el('text', { x: cx, y: H - M.b + 18, 'text-anchor': 'middle', class: 'axis-label' }, svg).textContent = fmtNum(rate) + '/s target';
-
-      // error annotation, stacked, only for clients that actually errored
-      const errored = bars.filter(b => b.row.error_rate > 0.001);
-      errored.forEach((b, li) => {
-        const t = el('text', {
-          x: cx, y: H - M.b + 32 + li * 12, 'text-anchor': 'middle',
-          class: 'end-label', fill: cssVar('--critical'), 'font-size': '10',
-        }, svg);
-        t.textContent = `${b.client} ${(b.row.error_rate * 100).toFixed(1)}% err`;
-      });
-    });
-
-    function showBarTooltip(ev, svgEl, b) {
-      tooltip.innerHTML = '';
-      const xRow = document.createElement('div');
-      xRow.className = 'x';
-      xRow.textContent = 'target ' + fmtNum(b.row.param) + '/s';
-      tooltip.appendChild(xRow);
-      const row = document.createElement('div');
-      row.className = 'row';
-      const key = document.createElement('span'); key.className = 'key'; key.style.background = colors[b.client];
-      const label = document.createElement('span'); label.textContent = b.client;
-      const val = document.createElement('span'); val.className = 'val'; val.textContent = fmtNum(b.row.req_per_sec) + '/s delivered';
-      row.appendChild(key); row.appendChild(label); row.appendChild(val);
-      tooltip.appendChild(row);
-      if (b.row.error_rate > 0.001) {
-        const errRow = document.createElement('div'); errRow.className = 'row';
-        errRow.innerHTML = `<span class="key" style="background:transparent"></span><span>error rate</span><span class="val" style="color:${cssVar('--critical')}">${(b.row.error_rate * 100).toFixed(1)}%</span>`;
-        tooltip.appendChild(errRow);
-      }
-      const rect = svgEl.getBoundingClientRect();
-      const scale = svgEl.viewBox.baseVal.width / rect.width;
-      tooltip.style.left = (rect.left + (b.x + 17) / scale + window.scrollX) + 'px';
-      tooltip.style.top = (rect.top + M.t / scale + window.scrollY - 6) + 'px';
-      tooltip.classList.add('show');
-    }
-  })();
-
-  // ---- cold TLS strip plot ----
-  (function coldChart() {
-    const svg = document.getElementById('cold-chart');
-    const W = 1100, H = 220, M = { l: 100, r: 40, t: 20, b: 34 };
-    const plotW = W - M.l - M.r, plotH = H - M.t - M.b;
-    const all = [...DATA.cold.native, ...DATA.cold.wreq];
-    const xMin = Math.min(...all) * 0.95, xMax = Math.max(...all) * 1.03;
-    const xPix = (v) => M.l + (v - xMin) / (xMax - xMin) * plotW;
-    const rowY = { native: M.t + plotH * 0.28, wreq: M.t + plotH * 0.72 };
-    const colors = { native: cssVar('--native'), wreq: cssVar('--wreq') };
-
-    const xTicks = linearTicks(xMin, xMax, 6);
-    for (const t of xTicks) {
-      const x = xPix(t);
-      el('line', { x1: x, x2: x, y1: M.t, y2: M.t + plotH, class: 'grid-line' }, svg);
-      el('text', { x, y: H - 10, 'text-anchor': 'middle', class: 'axis-label' }, svg).textContent = fmtNum(t) + 'ms';
-    }
-
-    for (const client of ['native', 'wreq']) {
-      el('text', { x: M.l - 12, y: rowY[client] + 4, 'text-anchor': 'end', class: 'axis-label', fill: colors[client] }, svg).textContent = client;
-      el('line', { x1: M.l, x2: W - M.r, y1: rowY[client], y2: rowY[client], class: 'grid-line' }, svg);
-      const vals = DATA.cold[client].slice().sort((a, b) => a - b);
-      const median = vals[Math.floor(vals.length / 2)];
-      for (const v of vals) {
-        const jitter = (Math.random() - 0.5) * 16;
-        const dot = el('circle', { cx: xPix(v), cy: rowY[client] + jitter, r: 3.5, fill: colors[client], opacity: 0.55 }, svg);
-        dot.addEventListener('pointerenter', (ev) => {
-          tooltip.innerHTML = `<div class="row"><span class="key" style="background:${colors[client]}"></span><span>${client}</span><span class="val">${v.toFixed(1)}ms</span></div>`;
-          const rect = svg.getBoundingClientRect();
-          const scale = svg.viewBox.baseVal.width / rect.width;
-          tooltip.style.left = (rect.left + xPix(v) / scale + window.scrollX) + 'px';
-          tooltip.style.top = (rect.top + (rowY[client] + jitter) / scale + window.scrollY - 10) + 'px';
-          tooltip.classList.add('show');
-        });
-        dot.addEventListener('pointerleave', () => tooltip.classList.remove('show'));
-      }
-      const mx = xPix(median);
-      el('line', { x1: mx, x2: mx, y1: rowY[client] - 22, y2: rowY[client] + 22, stroke: colors[client], 'stroke-width': 2 }, svg);
-      el('text', { x: mx, y: rowY[client] - 26, 'text-anchor': 'middle', class: 'end-label', fill: colors[client] }, svg).textContent = 'median ' + median.toFixed(1) + 'ms';
-    }
-  })();
-
-  // ---- data table ----
-  (function dataTable() {
-    const tbody = document.querySelector('#data-table tbody');
-    const rows = [];
-    for (const sweep of ['vus', 'rate']) {
-      for (const profile of Object.keys(DATA[sweep])) {
-        rows.push(...DATA[sweep][profile]);
-      }
-    }
-    rows.sort((a, b) => a.sweep.localeCompare(b.sweep) || a.profile.localeCompare(b.profile) || a.param - b.param || a.client.localeCompare(b.client));
-    const frag = document.createDocumentFragment();
-    for (const r of rows) {
-      const tr = document.createElement('tr');
-      const cells = [
-        r.sweep, r.profile, r.param,
-        null, // client, handled specially
-        fmtNum(r.req_per_sec), fmtNum(r.http_p95_ms), fmtNum(r.client_avg_ms), fmtNum(r.client_p95_ms),
-        (r.error_rate * 100).toFixed(2),
-      ];
-      cells.forEach((c, i) => {
-        const td = document.createElement('td');
-        if (i === 3) {
-          const span = document.createElement('span');
-          span.className = 'client-tag ' + r.client;
-          span.textContent = r.client;
-          td.appendChild(span);
-        } else if (i === 8) {
-          td.textContent = c;
-          td.className = 'err-cell' + (r.error_rate > 0.001 ? ' has-err' : '');
-        } else {
-          td.textContent = c;
+    function logTicks(min, max) {
+      const lo = Math.floor(Math.log10(min))
+      const hi = Math.ceil(Math.log10(max))
+      const ticks = []
+      for (let e = lo; e <= hi; e++) {
+        for (const m of [1, 2, 5]) {
+          const v = m * Math.pow(10, e)
+          if (v >= min * 0.98 && v <= max * 1.02) ticks.push(v)
         }
-        tr.appendChild(td);
-      });
-      frag.appendChild(tr);
+      }
+      if (ticks.length < 2) return [min, max]
+      return ticks
     }
-    tbody.appendChild(frag);
-  })();
-})();
+
+    function fmtNum(v) {
+      if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'k'
+      if (v >= 100) return Math.round(v).toString()
+      if (v >= 10) return v.toFixed(1)
+      if (v >= 1) return v.toFixed(2)
+      return v.toFixed(3)
+    }
+
+    function seriesFor(rows, key) {
+      const out = { native: [], wreq: [] }
+      for (const r of rows) out[r.client].push({ x: r.param, y: r[key], row: r })
+      return out
+    }
+
+    // ---- generic small-multiple line chart ----
+    function lineChart(svg, opts) {
+      const W = 300,
+        H = 190
+      const M = { l: 34, r: 26, t: 10, b: 22 }
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`)
+      const plotW = W - M.l - M.r,
+        plotH = H - M.t - M.b
+
+      const xs = opts.series.native.map((p) => p.x)
+      const xMin = Math.min(...xs),
+        xMax = Math.max(...xs)
+      const allY = [...opts.series.native, ...opts.series.wreq].map((p) => p.y).filter((v) => v > 0)
+      let yMin = Math.min(...allY),
+        yMax = Math.max(...allY)
+      if (opts.yScale === 'log') {
+        yMin = Math.max(yMin * 0.85, yMin - 0.001)
+        yMax = yMax * 1.15
+      } else {
+        const pad = (yMax - yMin) * 0.12 || yMax * 0.1 || 1
+        yMin = Math.max(0, yMin - pad)
+        yMax = yMax + pad
+      }
+
+      const xPix = (v) =>
+        M.l +
+        ((Math.log10(v) - Math.log10(xMin)) / (Math.log10(xMax) - Math.log10(xMin) || 1)) * plotW
+      const yPix =
+        opts.yScale === 'log'
+          ? (v) =>
+              M.t +
+              plotH -
+              ((Math.log10(v) - Math.log10(yMin)) / (Math.log10(yMax) - Math.log10(yMin) || 1)) *
+                plotH
+          : (v) => M.t + plotH - ((v - yMin) / (yMax - yMin || 1)) * plotH
+
+      // gridlines (y)
+      const yTicks = opts.yScale === 'log' ? logTicks(yMin, yMax) : linearTicks(yMin, yMax, 4)
+      for (const t of yTicks) {
+        const y = yPix(t)
+        el('line', { x1: M.l, x2: W - M.r, y1: y, y2: y, class: 'grid-line' }, svg)
+        el(
+          'text',
+          { x: M.l - 6, y: y + 3, 'text-anchor': 'end', class: 'axis-label' },
+          svg
+        ).textContent = fmtNum(t)
+      }
+      // x ticks (actual data points)
+      for (const v of xs.filter((v, i) => xs.indexOf(v) === i)) {
+        const x = xPix(v)
+        el('text', { x, y: H - 4, 'text-anchor': 'middle', class: 'axis-label' }, svg).textContent =
+          fmtNum(v)
+      }
+      el(
+        'line',
+        { x1: M.l, x2: W - M.r, y1: M.t + plotH, y2: M.t + plotH, class: 'base-line' },
+        svg
+      )
+
+      // optional reference diagonal (target = achieved)
+      if (opts.refDiagonal) {
+        const p1x = xPix(xMin),
+          p1y = yPix(Math.max(yMin, xMin))
+        const p2x = xPix(xMax),
+          p2y = yPix(Math.min(yMax, xMax))
+        el('line', { x1: p1x, y1: p1y, x2: p2x, y2: p2y, class: 'ref-line' }, svg)
+      }
+
+      const colors = { native: cssVar('--native'), wreq: cssVar('--wreq') }
+      const dash = { native: 'none', wreq: '5 3' }
+      const points = { native: [], wreq: [] }
+      const ends = []
+
+      for (const client of ['native', 'wreq']) {
+        const pts = opts.series[client].filter((p) => p.y > 0)
+        const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xPix(p.x)} ${yPix(p.y)}`).join(' ')
+        el(
+          'path',
+          {
+            d,
+            fill: 'none',
+            stroke: colors[client],
+            'stroke-width': 2,
+            'stroke-dasharray': dash[client],
+            'stroke-linejoin': 'round',
+            'stroke-linecap': 'round',
+          },
+          svg
+        )
+        for (const p of pts) {
+          const dot = el(
+            'circle',
+            {
+              cx: xPix(p.x),
+              cy: yPix(p.y),
+              r: 3,
+              fill: colors[client],
+              stroke: cssVar('--surface'),
+              'stroke-width': 1.5,
+            },
+            svg
+          )
+          points[client].push({ el: dot, px: xPix(p.x), py: yPix(p.y), data: p, client })
+        }
+        if (pts.length) {
+          const last = pts[pts.length - 1]
+          ends.push({ client, x: xPix(last.x), y: yPix(last.y), text: fmtNum(last.y) })
+        }
+      }
+
+      // end labels: nudge apart vertically when the two series converge
+      if (ends.length === 2) {
+        const minGap = 12
+        const gap = ends[0].y - ends[1].y
+        if (Math.abs(gap) < minGap) {
+          const mid = (ends[0].y + ends[1].y) / 2
+          const [top, bottom] = ends[0].y <= ends[1].y ? [ends[0], ends[1]] : [ends[1], ends[0]]
+          top.y = mid - minGap / 2
+          bottom.y = mid + minGap / 2
+        }
+      }
+      for (const e of ends) {
+        el(
+          'text',
+          {
+            x: Math.min(e.x + 6, W - M.r + 20),
+            y: e.y + 3,
+            class: 'end-label',
+            fill: colors[e.client],
+          },
+          svg
+        ).textContent = e.text
+      }
+
+      attachHover(svg, [...points.native, ...points.wreq], M, plotW, plotH, opts.unit)
+    }
+
+    function attachHover(svg, allPoints, M, plotW, plotH, unit) {
+      const hitW = svg.viewBox.baseVal.width
+      const overlay = el(
+        'rect',
+        { x: M.l, y: M.t, width: plotW, height: plotH, fill: 'transparent' },
+        svg
+      )
+      const cross = el('line', { class: 'crosshair', y1: M.t, y2: M.t + plotH }, svg)
+      overlay.addEventListener('pointermove', (ev) => {
+        const rect = svg.getBoundingClientRect()
+        const scale = hitW / rect.width
+        const px = (ev.clientX - rect.left) * scale
+        let nearest = null,
+          bestDist = Infinity
+        const byX = new Map()
+        for (const p of allPoints) {
+          const dist = Math.abs(p.px - px)
+          if (dist < bestDist) {
+            bestDist = dist
+            nearest = p
+          }
+        }
+        if (!nearest) return
+        const sameX = allPoints.filter((p) => p.px === nearest.px)
+        cross.setAttribute('x1', nearest.px)
+        cross.setAttribute('x2', nearest.px)
+        cross.setAttribute('opacity', 1)
+        tooltip.innerHTML = ''
+        const xRow = document.createElement('div')
+        xRow.className = 'x'
+        xRow.textContent = 'x = ' + fmtNum(nearest.data.x)
+        tooltip.appendChild(xRow)
+        for (const p of sameX.sort((a, b) => (a.client === 'native' ? -1 : 1))) {
+          const row = document.createElement('div')
+          row.className = 'row'
+          const key = document.createElement('span')
+          key.className = 'key'
+          key.style.background = p.client === 'native' ? cssVar('--native') : cssVar('--wreq')
+          const label = document.createElement('span')
+          label.textContent = p.client === 'native' ? 'native' : 'wreq'
+          const val = document.createElement('span')
+          val.className = 'val'
+          val.textContent = fmtNum(p.data.y) + (unit || '')
+          row.appendChild(key)
+          row.appendChild(label)
+          row.appendChild(val)
+          tooltip.appendChild(row)
+        }
+        const rect2 = svg.getBoundingClientRect()
+        tooltip.style.left = rect2.left + nearest.px / scale + window.scrollX + 'px'
+        tooltip.style.top = rect2.top + nearest.py / scale + window.scrollY - 10 + 'px'
+        tooltip.classList.add('show')
+      })
+      overlay.addEventListener('pointerleave', () => {
+        tooltip.classList.remove('show')
+        cross.setAttribute('opacity', 0)
+      })
+    }
+
+    function buildGrid(containerId, sweepKey, metricKey, yScale, opts) {
+      const container = document.getElementById(containerId)
+      const order = [
+        'fast_small',
+        'small_fast',
+        'typical',
+        'large_nodelay',
+        'slow_large',
+        'huge_body',
+      ]
+      for (const profile of order) {
+        const rows = DATA[sweepKey][profile]
+        if (!rows) continue
+        const meta = DATA.profileMeta[profile]
+        const panel = document.createElement('div')
+        panel.className = 'panel' + (profile === 'huge_body' ? ' featured' : '')
+        const hasErr = rows.some((r) => r.error_rate > 0.001)
+        panel.innerHTML =
+          `<div class="ptitle">${profile.replace(/_/g, ' ')}</div><div class="psub">${meta.label}</div>` +
+          (hasErr ? `<div class="badge">errors</div>` : '')
+        const svg = el('svg', {})
+        panel.appendChild(svg)
+        container.appendChild(panel)
+        lineChart(svg, {
+          series: seriesFor(rows, metricKey),
+          yScale,
+          refDiagonal: !!opts.refDiagonal,
+          unit: opts.unit,
+        })
+      }
+    }
+
+    buildGrid('grid-vus-throughput', 'vus', 'req_per_sec', 'linear', { unit: '/s' })
+    buildGrid('grid-vus-latency', 'vus', 'client_p95_ms', 'log', { unit: 'ms' })
+    buildGrid('grid-rate-throughput', 'rate', 'req_per_sec', 'linear', {
+      refDiagonal: true,
+      unit: '/s',
+    })
+    buildGrid('grid-rate-latency', 'rate', 'client_p95_ms', 'log', { unit: 'ms' })
+
+    // ---- hero grouped-bar chart: huge_body rate sweep ----
+    ;(function heroChart() {
+      const svg = document.getElementById('hero-chart')
+      const rows = DATA.rate.huge_body
+      const rates = [...new Set(rows.map((r) => r.param))].sort((a, b) => a - b)
+      const W = 1100,
+        H = 360,
+        M = { l: 56, r: 20, t: 20, b: 66 }
+      const plotW = W - M.l - M.r,
+        plotH = H - M.t - M.b
+      const maxY = Math.max(...rows.map((r) => r.req_per_sec), ...rates) * 1.08
+      const yPix = (v) => M.t + plotH - (v / maxY) * plotH
+      const groupW = plotW / rates.length
+      const barW = 34,
+        gap = 8
+      const colors = { native: cssVar('--native'), wreq: cssVar('--wreq') }
+
+      const yTicks = linearTicks(0, maxY, 5)
+      for (const t of yTicks) {
+        const y = yPix(t)
+        el('line', { x1: M.l, x2: W - M.r, y1: y, y2: y, class: 'grid-line' }, svg)
+        el(
+          'text',
+          { x: M.l - 8, y: y + 4, 'text-anchor': 'end', class: 'axis-label' },
+          svg
+        ).textContent = fmtNum(t)
+      }
+      el('line', { x1: M.l, x2: W - M.r, y1: yPix(0), y2: yPix(0), class: 'base-line' }, svg)
+
+      rates.forEach((rate, i) => {
+        const cx = M.l + groupW * (i + 0.5)
+        const rowN = rows.find((r) => r.param === rate && r.client === 'native')
+        const rowW = rows.find((r) => r.param === rate && r.client === 'wreq')
+        const bars = [
+          { row: rowN, client: 'native', x: cx - gap / 2 - barW },
+          { row: rowW, client: 'wreq', x: cx + gap / 2 },
+        ]
+        for (const b of bars) {
+          const y = yPix(b.row.req_per_sec)
+          const rect = el(
+            'rect',
+            {
+              x: b.x,
+              y,
+              width: barW,
+              height: yPix(0) - y,
+              rx: 4,
+              ry: 4,
+              fill: colors[b.client],
+            },
+            svg
+          )
+          const label = el(
+            'text',
+            {
+              x: b.x + barW / 2,
+              y: y - 6,
+              'text-anchor': 'middle',
+              class: 'end-label',
+              fill: colors[b.client],
+            },
+            svg
+          )
+          label.textContent = fmtNum(Math.round(b.row.req_per_sec))
+          const hit = el(
+            'rect',
+            { x: b.x, y: M.t, width: barW, height: plotH, fill: 'transparent' },
+            svg
+          )
+          hit.addEventListener('pointerenter', (ev) => showBarTooltip(ev, svg, b))
+          hit.addEventListener('pointerleave', () => tooltip.classList.remove('show'))
+        }
+        // target tick — turns critical when either client misses it badly
+        const missed = bars.some((b) => b.row.req_per_sec < rate * 0.9)
+        const ty = yPix(rate)
+        el(
+          'line',
+          {
+            x1: cx - gap / 2 - barW - 4,
+            x2: cx + gap / 2 + barW + 4,
+            y1: ty,
+            y2: ty,
+            class: missed ? '' : 'ref-line',
+            stroke: missed ? cssVar('--critical') : cssVar('--muted'),
+            'stroke-width': 1,
+            'stroke-dasharray': '2 3',
+          },
+          svg
+        )
+        el(
+          'text',
+          { x: cx, y: H - M.b + 18, 'text-anchor': 'middle', class: 'axis-label' },
+          svg
+        ).textContent = fmtNum(rate) + '/s target'
+
+        // error annotation, stacked, only for clients that actually errored
+        const errored = bars.filter((b) => b.row.error_rate > 0.001)
+        errored.forEach((b, li) => {
+          const t = el(
+            'text',
+            {
+              x: cx,
+              y: H - M.b + 32 + li * 12,
+              'text-anchor': 'middle',
+              class: 'end-label',
+              fill: cssVar('--critical'),
+              'font-size': '10',
+            },
+            svg
+          )
+          t.textContent = `${b.client} ${(b.row.error_rate * 100).toFixed(1)}% err`
+        })
+      })
+
+      function showBarTooltip(ev, svgEl, b) {
+        tooltip.innerHTML = ''
+        const xRow = document.createElement('div')
+        xRow.className = 'x'
+        xRow.textContent = 'target ' + fmtNum(b.row.param) + '/s'
+        tooltip.appendChild(xRow)
+        const row = document.createElement('div')
+        row.className = 'row'
+        const key = document.createElement('span')
+        key.className = 'key'
+        key.style.background = colors[b.client]
+        const label = document.createElement('span')
+        label.textContent = b.client
+        const val = document.createElement('span')
+        val.className = 'val'
+        val.textContent = fmtNum(b.row.req_per_sec) + '/s delivered'
+        row.appendChild(key)
+        row.appendChild(label)
+        row.appendChild(val)
+        tooltip.appendChild(row)
+        if (b.row.error_rate > 0.001) {
+          const errRow = document.createElement('div')
+          errRow.className = 'row'
+          errRow.innerHTML = `<span class="key" style="background:transparent"></span><span>error rate</span><span class="val" style="color:${cssVar('--critical')}">${(b.row.error_rate * 100).toFixed(1)}%</span>`
+          tooltip.appendChild(errRow)
+        }
+        const rect = svgEl.getBoundingClientRect()
+        const scale = svgEl.viewBox.baseVal.width / rect.width
+        tooltip.style.left = rect.left + (b.x + 17) / scale + window.scrollX + 'px'
+        tooltip.style.top = rect.top + M.t / scale + window.scrollY - 6 + 'px'
+        tooltip.classList.add('show')
+      }
+    })()
+
+    // ---- cold TLS strip plot ----
+    ;(function coldChart() {
+      const svg = document.getElementById('cold-chart')
+      const W = 1100,
+        H = 220,
+        M = { l: 100, r: 40, t: 20, b: 34 }
+      const plotW = W - M.l - M.r,
+        plotH = H - M.t - M.b
+      const all = [...DATA.cold.native, ...DATA.cold.wreq]
+      const xMin = Math.min(...all) * 0.95,
+        xMax = Math.max(...all) * 1.03
+      const xPix = (v) => M.l + ((v - xMin) / (xMax - xMin)) * plotW
+      const rowY = { native: M.t + plotH * 0.28, wreq: M.t + plotH * 0.72 }
+      const colors = { native: cssVar('--native'), wreq: cssVar('--wreq') }
+
+      const xTicks = linearTicks(xMin, xMax, 6)
+      for (const t of xTicks) {
+        const x = xPix(t)
+        el('line', { x1: x, x2: x, y1: M.t, y2: M.t + plotH, class: 'grid-line' }, svg)
+        el(
+          'text',
+          { x, y: H - 10, 'text-anchor': 'middle', class: 'axis-label' },
+          svg
+        ).textContent = fmtNum(t) + 'ms'
+      }
+
+      for (const client of ['native', 'wreq']) {
+        el(
+          'text',
+          {
+            x: M.l - 12,
+            y: rowY[client] + 4,
+            'text-anchor': 'end',
+            class: 'axis-label',
+            fill: colors[client],
+          },
+          svg
+        ).textContent = client
+        el(
+          'line',
+          { x1: M.l, x2: W - M.r, y1: rowY[client], y2: rowY[client], class: 'grid-line' },
+          svg
+        )
+        const vals = DATA.cold[client].slice().sort((a, b) => a - b)
+        const median = vals[Math.floor(vals.length / 2)]
+        for (const v of vals) {
+          const jitter = (Math.random() - 0.5) * 16
+          const dot = el(
+            'circle',
+            { cx: xPix(v), cy: rowY[client] + jitter, r: 3.5, fill: colors[client], opacity: 0.55 },
+            svg
+          )
+          dot.addEventListener('pointerenter', (ev) => {
+            tooltip.innerHTML = `<div class="row"><span class="key" style="background:${colors[client]}"></span><span>${client}</span><span class="val">${v.toFixed(1)}ms</span></div>`
+            const rect = svg.getBoundingClientRect()
+            const scale = svg.viewBox.baseVal.width / rect.width
+            tooltip.style.left = rect.left + xPix(v) / scale + window.scrollX + 'px'
+            tooltip.style.top =
+              rect.top + (rowY[client] + jitter) / scale + window.scrollY - 10 + 'px'
+            tooltip.classList.add('show')
+          })
+          dot.addEventListener('pointerleave', () => tooltip.classList.remove('show'))
+        }
+        const mx = xPix(median)
+        el(
+          'line',
+          {
+            x1: mx,
+            x2: mx,
+            y1: rowY[client] - 22,
+            y2: rowY[client] + 22,
+            stroke: colors[client],
+            'stroke-width': 2,
+          },
+          svg
+        )
+        el(
+          'text',
+          {
+            x: mx,
+            y: rowY[client] - 26,
+            'text-anchor': 'middle',
+            class: 'end-label',
+            fill: colors[client],
+          },
+          svg
+        ).textContent = 'median ' + median.toFixed(1) + 'ms'
+      }
+    })()
+
+    // ---- data table ----
+    ;(function dataTable() {
+      const tbody = document.querySelector('#data-table tbody')
+      const rows = []
+      for (const sweep of ['vus', 'rate']) {
+        for (const profile of Object.keys(DATA[sweep])) {
+          rows.push(...DATA[sweep][profile])
+        }
+      }
+      rows.sort(
+        (a, b) =>
+          a.sweep.localeCompare(b.sweep) ||
+          a.profile.localeCompare(b.profile) ||
+          a.param - b.param ||
+          a.client.localeCompare(b.client)
+      )
+      const frag = document.createDocumentFragment()
+      for (const r of rows) {
+        const tr = document.createElement('tr')
+        const cells = [
+          r.sweep,
+          r.profile,
+          r.param,
+          null, // client, handled specially
+          fmtNum(r.req_per_sec),
+          fmtNum(r.http_p95_ms),
+          fmtNum(r.client_avg_ms),
+          fmtNum(r.client_p95_ms),
+          (r.error_rate * 100).toFixed(2),
+        ]
+        cells.forEach((c, i) => {
+          const td = document.createElement('td')
+          if (i === 3) {
+            const span = document.createElement('span')
+            span.className = 'client-tag ' + r.client
+            span.textContent = r.client
+            td.appendChild(span)
+          } else if (i === 8) {
+            td.textContent = c
+            td.className = 'err-cell' + (r.error_rate > 0.001 ? ' has-err' : '')
+          } else {
+            td.textContent = c
+          }
+          tr.appendChild(td)
+        })
+        frag.appendChild(tr)
+      }
+      tbody.appendChild(frag)
+    })()
+  })()
 </script>

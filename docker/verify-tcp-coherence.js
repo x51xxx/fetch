@@ -29,20 +29,19 @@ async function main() {
   console.log('tcpip.init_ttl:    ', ttl)
   console.log('tcpip.tcp_options_order:', JSON.stringify(optionOrder))
 
-  const looksLinux = typeof osGuess === 'string' && /linux/i.test(osGuess) && !/windows|mac ?os|ios/i.test(osGuess)
+  const looksLinux =
+    typeof osGuess === 'string' && /linux/i.test(osGuess) && !/windows|mac ?os|ios/i.test(osGuess)
 
   if (looksLinux) {
-    console.log('\nPASS: tcpip.os_guess reports Linux -- TCP/IP layer is coherent with platform: "linux".')
+    console.log(
+      '\nPASS: tcpip.os_guess reports Linux -- TCP/IP layer is coherent with platform: "linux".'
+    )
     process.exit(0)
   }
 
   console.error(`\nFAIL: tcpip.os_guess is "${osGuess}", expected something Linux-only.`)
-  console.error(
-    'Verified cause on Docker Desktop for Mac: its network virtualization NATs/proxies'
-  )
-  console.error(
-    'container egress through the macOS host stack rather than exposing the Linux VM'
-  )
+  console.error('Verified cause on Docker Desktop for Mac: its network virtualization NATs/proxies')
+  console.error('container egress through the macOS host stack rather than exposing the Linux VM')
   console.error(
     'kernel directly to the internet, so the TCP/IP fingerprint stays macOS/Windows even'
   )

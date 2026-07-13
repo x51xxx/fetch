@@ -19,7 +19,7 @@ function withEchoServer(run) {
           xRequestId: req.headers['x-request-id'] || null,
           bodyHex: body.toString('hex'),
           bodyText: body.toString('utf-8'),
-        }),
+        })
       )
     })
   })

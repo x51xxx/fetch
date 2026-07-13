@@ -30,7 +30,9 @@ function stats(values) {
 }
 
 async function main() {
-  console.log(`Cold-connection probe against ${URL}, ${N} trials per client (alternating, fresh process per request)\n`)
+  console.log(
+    `Cold-connection probe against ${URL}, ${N} trials per client (alternating, fresh process per request)\n`
+  )
   const nativeTimes = []
   const wreqTimes = []
   const nativeErrors = []
@@ -45,20 +47,28 @@ async function main() {
     if (w.ok) wreqTimes.push(w.elapsed)
     else wreqErrors.push(w.error)
 
-    process.stdout.write(`  trial ${i + 1}/${N}: native=${n.ok ? n.elapsed.toFixed(1) + 'ms' : 'ERR'}  wreq=${w.ok ? w.elapsed.toFixed(1) + 'ms' : 'ERR'}\n`)
+    process.stdout.write(
+      `  trial ${i + 1}/${N}: native=${n.ok ? n.elapsed.toFixed(1) + 'ms' : 'ERR'}  wreq=${w.ok ? w.elapsed.toFixed(1) + 'ms' : 'ERR'}\n`
+    )
   }
 
   console.log('\n--- results (ms, includes DNS+TCP+TLS handshake, no pooling) ---')
   if (nativeTimes.length) {
     const s = stats(nativeTimes)
-    console.log(`native fetch : n=${s.n} avg=${s.avg.toFixed(1)} min=${s.min.toFixed(1)} median=${s.median.toFixed(1)} p95=${s.p95.toFixed(1)} max=${s.max.toFixed(1)}`)
+    console.log(
+      `native fetch : n=${s.n} avg=${s.avg.toFixed(1)} min=${s.min.toFixed(1)} median=${s.median.toFixed(1)} p95=${s.p95.toFixed(1)} max=${s.max.toFixed(1)}`
+    )
   }
   if (wreqTimes.length) {
     const s = stats(wreqTimes)
-    console.log(`my-fetch     : n=${s.n} avg=${s.avg.toFixed(1)} min=${s.min.toFixed(1)} median=${s.median.toFixed(1)} p95=${s.p95.toFixed(1)} max=${s.max.toFixed(1)}`)
+    console.log(
+      `my-fetch     : n=${s.n} avg=${s.avg.toFixed(1)} min=${s.min.toFixed(1)} median=${s.median.toFixed(1)} p95=${s.p95.toFixed(1)} max=${s.max.toFixed(1)}`
+    )
   }
-  if (nativeErrors.length) console.log(`native errors (${nativeErrors.length}):`, [...new Set(nativeErrors)])
-  if (wreqErrors.length) console.log(`wreq errors (${wreqErrors.length}):`, [...new Set(wreqErrors)])
+  if (nativeErrors.length)
+    console.log(`native errors (${nativeErrors.length}):`, [...new Set(nativeErrors)])
+  if (wreqErrors.length)
+    console.log(`wreq errors (${wreqErrors.length}):`, [...new Set(wreqErrors)])
 }
 
 main()

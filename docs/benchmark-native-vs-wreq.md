@@ -8,13 +8,13 @@ Interactive version with charts: [`benchmark-report.html`](./benchmark-report.ht
 
 ## TL;DR
 
-| | native fetch | my-fetch |
-|---|---|---|
-| 2 MB payload @ 1000 req/s sustained — delivered | 636 req/s | 999.9 req/s |
-| same run — error rate | 14.7% | 0.00% |
-| same run — http p95 | 1.77s | 3.3ms |
-| 512B payload, 1 concurrent request | 606 req/s | 3252 req/s (5.4×) |
-| cold real-HTTPS handshake, n=50, median | 107.4ms | 62.8ms (1.7×) |
+|                                                 | native fetch | my-fetch          |
+| ----------------------------------------------- | ------------ | ----------------- |
+| 2 MB payload @ 1000 req/s sustained — delivered | 636 req/s    | 999.9 req/s       |
+| same run — error rate                           | 14.7%        | 0.00%             |
+| same run — http p95                             | 1.77s        | 3.3ms             |
+| 512B payload, 1 concurrent request              | 606 req/s    | 3252 req/s (5.4×) |
+| cold real-HTTPS handshake, n=50, median         | 107.4ms      | 62.8ms (1.7×)     |
 
 ## Why a gateway, not k6 calling the library directly
 
@@ -84,13 +84,13 @@ session, or write a small script — the placeholder is `__REPORT_DATA_JSON__`).
 At **2MB payload × 1000 req/s** sustained (~2GB/s offered through the
 gateway):
 
-| | native fetch | my-fetch |
-|---|---|---|
-| delivered req/s | 636 | 999.9 |
-| error rate | 14.7% | 0.00% |
-| http p95 | 1.77s | 3.3ms |
-| dropped iterations | 2610 | 0 |
-| actual throughput | ~1.1 GB/s | ~2.1 GB/s |
+|                    | native fetch | my-fetch  |
+| ------------------ | ------------ | --------- |
+| delivered req/s    | 636          | 999.9     |
+| error rate         | 14.7%        | 0.00%     |
+| http p95           | 1.77s        | 3.3ms     |
+| dropped iterations | 2610         | 0         |
+| actual throughput  | ~1.1 GB/s    | ~2.1 GB/s |
 
 native fetch (undici) backpressures hard under sustained large-body load;
 my-fetch delivers the full target rate with sub-4ms p95 and zero errors. At
@@ -130,16 +130,16 @@ difference attributable to the handshake/connection path itself.
 
 ## Source files
 
-| File | Purpose |
-|---|---|
-| `bench/upstream-server.js` | Synthetic HTTP upstream: configurable delay/size via query params, cached response bodies, connection/request counters at `/stats`. |
-| `bench/gateway-server.js` | Per-client wrapper (`CLIENT=native\|wreq` env var) that forwards to the upstream and times its own outbound call. |
-| `bench/k6-scenario.js` | k6 scenario script, env-configurable executor (`constant-vus` / `constant-arrival-rate`), VUs/rate/duration/delay/size. |
-| `bench/run-matrix.sh` | Orchestrates upstream + both gateways, sweeps the full profile × concurrency/rate matrix sequentially, writes `bench/results/*.json` + `summary.csv`. |
-| `bench/report.js` | Parses `bench/results/*.json` into a console comparison table + `summary.csv`. |
-| `bench/cold-tls-probe.js` + `bench/probe-child-{native,wreq}.js` | Cold-connection real-HTTPS latency probe (fresh process per request). |
-| `bench/build-report-data.js` | Aggregates `summary.csv` + cold-probe output into `bench/report-data.json` for the HTML report. |
-| `bench/report-template.html` | HTML report template (charts via hand-rolled SVG, no external dependencies) — `__REPORT_DATA_JSON__` placeholder gets spliced with the built data. |
+| File                                                             | Purpose                                                                                                                                               |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bench/upstream-server.js`                                       | Synthetic HTTP upstream: configurable delay/size via query params, cached response bodies, connection/request counters at `/stats`.                   |
+| `bench/gateway-server.js`                                        | Per-client wrapper (`CLIENT=native\|wreq` env var) that forwards to the upstream and times its own outbound call.                                     |
+| `bench/k6-scenario.js`                                           | k6 scenario script, env-configurable executor (`constant-vus` / `constant-arrival-rate`), VUs/rate/duration/delay/size.                               |
+| `bench/run-matrix.sh`                                            | Orchestrates upstream + both gateways, sweeps the full profile × concurrency/rate matrix sequentially, writes `bench/results/*.json` + `summary.csv`. |
+| `bench/report.js`                                                | Parses `bench/results/*.json` into a console comparison table + `summary.csv`.                                                                        |
+| `bench/cold-tls-probe.js` + `bench/probe-child-{native,wreq}.js` | Cold-connection real-HTTPS latency probe (fresh process per request).                                                                                 |
+| `bench/build-report-data.js`                                     | Aggregates `summary.csv` + cold-probe output into `bench/report-data.json` for the HTML report.                                                       |
+| `bench/report-template.html`                                     | HTML report template (charts via hand-rolled SVG, no external dependencies) — `__REPORT_DATA_JSON__` placeholder gets spliced with the built data.    |
 
 `bench/results/` (raw k6 JSON exports, logs, `summary.csv`) is gitignored —
 regenerate with `bash bench/run-matrix.sh`.

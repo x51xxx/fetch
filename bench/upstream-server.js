@@ -22,7 +22,13 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === '/stats') {
     res.writeHead(200, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ requests: requestCount, sockets: socketCount, liveSockets: liveSockets.size }))
+    res.end(
+      JSON.stringify({
+        requests: requestCount,
+        sockets: socketCount,
+        liveSockets: liveSockets.size,
+      })
+    )
     return
   }
   if (url.pathname === '/reset') {
@@ -39,7 +45,10 @@ const server = http.createServer((req, res) => {
   const body = bodyFor(sizeBytes)
 
   const send = () => {
-    res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': body.length })
+    res.writeHead(200, {
+      'content-type': 'application/octet-stream',
+      'content-length': body.length,
+    })
     res.end(body)
   }
   if (delayMs > 0) setTimeout(send, delayMs)

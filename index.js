@@ -105,7 +105,7 @@ async function normalizeBody(body) {
       'FormData/multipart request bodies are not supported: a generic multipart ' +
         'serialization (boundary, part order, header casing) would diverge the ' +
         'impersonated browser fingerprint. Serialize it yourself and pass a string ' +
-        'or Uint8Array.',
+        'or Uint8Array.'
     )
   }
   if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) {
@@ -144,7 +144,9 @@ async function fetch(input, init) {
     url = String(input)
   }
 
-  const method = normalizeMethod(init.method != null ? init.method : requestObj && requestObj.method)
+  const method = normalizeMethod(
+    init.method != null ? init.method : requestObj && requestObj.method
+  )
 
   const headerSource =
     'headers' in init && init.headers != null ? init.headers : requestObj && requestObj.headers

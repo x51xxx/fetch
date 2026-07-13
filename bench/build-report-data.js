@@ -68,4 +68,8 @@ const data = {
 }
 
 fs.writeFileSync(path.join(__dirname, 'report-data.json'), JSON.stringify(data))
-console.log('wrote', path.join(__dirname, 'report-data.json'), `(${rows.length} rows, ${cold.native.length} cold trials)`)
+console.log(
+  'wrote',
+  path.join(__dirname, 'report-data.json'),
+  `(${rows.length} rows, ${cold.native.length} cold trials)`
+)

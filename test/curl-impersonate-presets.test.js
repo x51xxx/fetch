@@ -41,7 +41,9 @@ test('a curl-impersonate preset resolves through fetch() and matches its native 
   assert.ok(preset && preset.exact)
 
   const viaCurlName = await fetch('https://tls.peet.ws/api/all', { impersonate: preset.name })
-  const viaNativeProfile = await fetch('https://tls.peet.ws/api/all', { impersonate: preset.profile })
+  const viaNativeProfile = await fetch('https://tls.peet.ws/api/all', {
+    impersonate: preset.profile,
+  })
   assert.equal(viaCurlName.status, 200)
   assert.equal(viaNativeProfile.status, 200)
 

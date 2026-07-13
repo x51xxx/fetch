@@ -13,23 +13,14 @@ export type { FetchHeaders, FetchOptions, ImpersonatePresetInfo, TlsOptionsOverr
 
 /** Anything the wrapper accepts as request headers. */
 export type HeadersInit =
-  | Headers
-  | Record<string, string>
-  | Array<[string, string]>
-  | Iterable<[string, string]>
+  Headers | Record<string, string> | Array<[string, string]> | Iterable<[string, string]>
 
 /**
  * Anything the wrapper accepts as a request body. Higher-level shapes are
  * normalized to a string or bytes before reaching the native layer.
  * `FormData` and `ReadableStream` are intentionally rejected — see the README.
  */
-export type BodyInit =
-  | string
-  | Uint8Array
-  | ArrayBuffer
-  | ArrayBufferView
-  | URLSearchParams
-  | Blob
+export type BodyInit = string | Uint8Array | ArrayBuffer | ArrayBufferView | URLSearchParams | Blob
 
 /** A `Request`-like input: the wrapper reads `url`/`method`/`headers` and buffers the body. */
 export interface RequestLike {

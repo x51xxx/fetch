@@ -49,11 +49,16 @@ const server = http.createServer(async (req, res) => {
     res.end(buf)
   } catch (err) {
     const upstreamMs = Number(process.hrtime.bigint() - start) / 1e6
-    res.writeHead(502, { 'content-type': 'application/json', 'x-upstream-ms': upstreamMs.toFixed(3) })
-    res.end(JSON.stringify({ error: String(err && err.message || err) }))
+    res.writeHead(502, {
+      'content-type': 'application/json',
+      'x-upstream-ms': upstreamMs.toFixed(3),
+    })
+    res.end(JSON.stringify({ error: String((err && err.message) || err) }))
   }
 })
 
 server.listen(PORT, HOST, () => {
-  console.log(`[gateway:${CLIENT}] listening on http://${HOST}:${PORT} -> ${UPSTREAM} (impersonate=${IMPERSONATE})`)
+  console.log(
+    `[gateway:${CLIENT}] listening on http://${HOST}:${PORT} -> ${UPSTREAM} (impersonate=${IMPERSONATE})`
+  )
 })

@@ -12,26 +12,26 @@ yet. For the conceptual overview and the fingerprint-specific use cases, see the
 
 ## TL;DR
 
-| Capability | Native `fetch` | `@trishchuk/fetch` | Notes |
-|---|---|---|---|
-| `fetch(input, init)` signature | ✅ | ✅ | |
-| `input`: URL string / `URL` / `Request`-like | ✅ | ✅ | A `Request`'s body is buffered, not streamed |
-| Non-2xx resolves (no throw) | ✅ | ✅ | Check `res.ok` / `res.status` |
-| Body: `string` | ✅ | ✅ | |
-| Body: `Uint8Array` / `Buffer` / `ArrayBuffer` / typed arrays | ✅ | ✅ | |
-| Body: `URLSearchParams` | ✅ | ✅ | Auto `Content-Type` |
-| Body: `Blob` | ✅ | ✅ | `Content-Type` from `blob.type` |
-| Body: `FormData` / multipart | ✅ | ❌ throws | Would diverge the fingerprint — [why](#why-no-formdata) |
-| Body: `ReadableStream` (streaming upload) | ✅ | ❌ throws | Buffered only |
-| Headers: `Headers` / array / object | ✅ | ✅ | Case-insensitive dupes combined |
-| Response `text` / `json` / `arrayBuffer` / `bytes` / `blob` | ✅ | ✅ | `arrayBuffer()` → real `ArrayBuffer` |
-| Response body **re-readable** | ❌ (single-use) | ✅ | Buffered, so a 2nd read works |
-| `res.headers` = WHATWG `Headers` | ✅ | ✅ | Plus `res.rawHeaders` (original casing/order) |
-| `res.body` (`ReadableStream`) | ✅ | ❌ | Buffered; no streaming download |
-| `res.clone()` / `res.formData()` / `res.type` | ✅ | ❌ | `clone()` rarely needed (re-readable) |
-| `AbortSignal` (`init.signal`) | ✅ | ❌ no-op | Use `timeoutMs`; real cancel is planned |
-| `redirect` / `credentials` / `mode` / `cache` | ✅ | ❌ | Always follows redirects; no browser context |
-| **TLS/HTTP2 fingerprint control** | ❌ | ✅ | The whole point — `impersonate`, `tlsOptions`, … |
+| Capability                                                   | Native `fetch`  | `@trishchuk/fetch` | Notes                                                   |
+| ------------------------------------------------------------ | --------------- | ------------------ | ------------------------------------------------------- |
+| `fetch(input, init)` signature                               | ✅              | ✅                 |                                                         |
+| `input`: URL string / `URL` / `Request`-like                 | ✅              | ✅                 | A `Request`'s body is buffered, not streamed            |
+| Non-2xx resolves (no throw)                                  | ✅              | ✅                 | Check `res.ok` / `res.status`                           |
+| Body: `string`                                               | ✅              | ✅                 |                                                         |
+| Body: `Uint8Array` / `Buffer` / `ArrayBuffer` / typed arrays | ✅              | ✅                 |                                                         |
+| Body: `URLSearchParams`                                      | ✅              | ✅                 | Auto `Content-Type`                                     |
+| Body: `Blob`                                                 | ✅              | ✅                 | `Content-Type` from `blob.type`                         |
+| Body: `FormData` / multipart                                 | ✅              | ❌ throws          | Would diverge the fingerprint — [why](#why-no-formdata) |
+| Body: `ReadableStream` (streaming upload)                    | ✅              | ❌ throws          | Buffered only                                           |
+| Headers: `Headers` / array / object                          | ✅              | ✅                 | Case-insensitive dupes combined                         |
+| Response `text` / `json` / `arrayBuffer` / `bytes` / `blob`  | ✅              | ✅                 | `arrayBuffer()` → real `ArrayBuffer`                    |
+| Response body **re-readable**                                | ❌ (single-use) | ✅                 | Buffered, so a 2nd read works                           |
+| `res.headers` = WHATWG `Headers`                             | ✅              | ✅                 | Plus `res.rawHeaders` (original casing/order)           |
+| `res.body` (`ReadableStream`)                                | ✅              | ❌                 | Buffered; no streaming download                         |
+| `res.clone()` / `res.formData()` / `res.type`                | ✅              | ❌                 | `clone()` rarely needed (re-readable)                   |
+| `AbortSignal` (`init.signal`)                                | ✅              | ❌ no-op           | Use `timeoutMs`; real cancel is planned                 |
+| `redirect` / `credentials` / `mode` / `cache`                | ✅              | ❌                 | Always follows redirects; no browser context            |
+| **TLS/HTTP2 fingerprint control**                            | ❌              | ✅                 | The whole point — `impersonate`, `tlsOptions`, …        |
 
 ## Call signature and inputs
 
@@ -64,28 +64,28 @@ accepted but ignored — see [Differences](#how-it-differs-from-native-fetch).
 
 ### WHATWG fields
 
-| Field | Type | Default | Notes |
-|---|---|---|---|
-| `method` | `string` | `"GET"` | Standard names are upper-cased (`post` → `POST`); custom methods pass through as-is |
-| `headers` | `Headers \| [string,string][] \| Record<string,string>` | none | See [Request headers](#request-headers) |
-| `body` | see [Request bodies](#request-bodies) | none | |
+| Field     | Type                                                    | Default | Notes                                                                               |
+| --------- | ------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------- |
+| `method`  | `string`                                                | `"GET"` | Standard names are upper-cased (`post` → `POST`); custom methods pass through as-is |
+| `headers` | `Headers \| [string,string][] \| Record<string,string>` | none    | See [Request headers](#request-headers)                                             |
+| `body`    | see [Request bodies](#request-bodies)                   | none    |                                                                                     |
 
 ### Fingerprint / transport extensions
 
 These have no native-`fetch` equivalent — they're why this package exists.
 Full semantics and worked examples live in the [README use cases](../README.md#use-cases).
 
-| Field | Type | Meaning |
-|---|---|---|
-| `impersonate` | `string` | Browser fingerprint to emulate (`"chrome_147"` default, curl-impersonate presets, `"random"`) |
-| `platform` | `string` | Declared OS for UA/client-hint headers; does **not** diverge the TLS fingerprint |
-| `proxy` | `string` | Per-request proxy (`http`/`https`/`socks5`, optional userinfo) |
-| `session` | `string` | Opaque id; calls sharing it reuse one client + cookie jar |
-| `timeoutMs` | `number` | Overall request timeout |
-| `maxResponseBytes` | `number` | Response buffer cap (default 32 MiB) |
-| `tlsMinVersion` / `tlsMaxVersion` | `string` | TLS version bounds (`"1.0"`–`"1.3"`) |
-| `httpVersion` | `string` | Force `"http1"` / `"http2"` instead of ALPN |
-| `tlsOptions` | `object` | Raw ClientHello overrides — **diverges the fingerprint**, use sparingly |
+| Field                             | Type     | Meaning                                                                                       |
+| --------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `impersonate`                     | `string` | Browser fingerprint to emulate (`"chrome_147"` default, curl-impersonate presets, `"random"`) |
+| `platform`                        | `string` | Declared OS for UA/client-hint headers; does **not** diverge the TLS fingerprint              |
+| `proxy`                           | `string` | Per-request proxy (`http`/`https`/`socks5`, optional userinfo)                                |
+| `session`                         | `string` | Opaque id; calls sharing it reuse one client + cookie jar                                     |
+| `timeoutMs`                       | `number` | Overall request timeout                                                                       |
+| `maxResponseBytes`                | `number` | Response buffer cap (default 32 MiB)                                                          |
+| `tlsMinVersion` / `tlsMaxVersion` | `string` | TLS version bounds (`"1.0"`–`"1.3"`)                                                          |
+| `httpVersion`                     | `string` | Force `"http1"` / `"http2"` instead of ALPN                                                   |
+| `tlsOptions`                      | `object` | Raw ClientHello overrides — **diverges the fingerprint**, use sparingly                       |
 
 ## Request bodies
 
@@ -93,16 +93,16 @@ Everything reduces to a UTF-8 string or raw bytes before hitting the native
 layer. When a body type has a canonical `Content-Type`, it's applied **only if
 you didn't set one yourself**.
 
-| You pass | Sent as | Default `Content-Type` |
-|---|---|---|
-| `string` | the string | none |
-| `Uint8Array` / `Buffer` / typed array / `DataView` | its exact bytes | none |
-| `ArrayBuffer` / `SharedArrayBuffer` | its bytes | none |
-| `URLSearchParams` | `key=val&…` | `application/x-www-form-urlencoded;charset=UTF-8` |
-| `Blob` | the blob's bytes | the blob's `type` |
-| `FormData` | — | **throws** ([why](#why-no-formdata)) |
-| `ReadableStream` | — | **throws** (no streaming upload) |
-| `null` / `undefined` | no body | none |
+| You pass                                           | Sent as          | Default `Content-Type`                            |
+| -------------------------------------------------- | ---------------- | ------------------------------------------------- |
+| `string`                                           | the string       | none                                              |
+| `Uint8Array` / `Buffer` / typed array / `DataView` | its exact bytes  | none                                              |
+| `ArrayBuffer` / `SharedArrayBuffer`                | its bytes        | none                                              |
+| `URLSearchParams`                                  | `key=val&…`      | `application/x-www-form-urlencoded;charset=UTF-8` |
+| `Blob`                                             | the blob's bytes | the blob's `type`                                 |
+| `FormData`                                         | —                | **throws** ([why](#why-no-formdata))              |
+| `ReadableStream`                                   | —                | **throws** (no streaming upload)                  |
+| `null` / `undefined`                               | no body          | none                                              |
 
 ```js
 // bytes
@@ -130,7 +130,7 @@ await fetch(url, { method: 'POST', body: backing.subarray(2, 5) }) // sends 3,4,
 
 A real browser's multipart serialization — the `----WebKitFormBoundary…` token,
 part ordering, per-part header casing — is itself fingerprintable. Emitting a
-*generic* multipart body would add a tell while you're trying to look like
+_generic_ multipart body would add a tell while you're trying to look like
 Chrome, the same reason `tlsOptions` is opt-in. Until the serialization can be
 matched to the impersonated browser, `FormData` throws rather than silently
 diverge. If you need multipart now, serialize it yourself and pass the bytes
@@ -141,9 +141,14 @@ plus your own `Content-Type: multipart/form-data; boundary=…`.
 `headers` accepts any WHATWG `HeadersInit`:
 
 ```js
-await fetch(url, { headers: { 'x-a': '1' } })                 // object
-await fetch(url, { headers: [['x-a', '1'], ['x-b', '2']] })   // array of pairs
-await fetch(url, { headers: new Headers({ 'x-a': '1' }) })    // Headers instance
+await fetch(url, { headers: { 'x-a': '1' } }) // object
+await fetch(url, {
+  headers: [
+    ['x-a', '1'],
+    ['x-b', '2'],
+  ],
+}) // array of pairs
+await fetch(url, { headers: new Headers({ 'x-a': '1' }) }) // Headers instance
 ```
 
 Case-insensitive duplicate names are **combined** with `", "` the way
@@ -161,21 +166,21 @@ explicitly or let a `URLSearchParams`/`Blob` body default it — verified agains
 
 ## Response (`FetchResponse`)
 
-| Member | Type | Notes |
-|---|---|---|
-| `status` | `number` | |
-| `statusText` | `string` | Canonical reason phrase from the `http` crate, not the literal wire bytes (HTTP/2 has none) |
-| `ok` | `boolean` | `status` in `200..299` |
-| `url` | `string` | Final URL after redirects |
-| `redirected` | `boolean` | Final URL differs from requested |
-| `bodyUsed` | `boolean` | `true` once any accessor ran (advisory — bodies are re-readable) |
-| `headers` | `Headers` | WHATWG `Headers` (iterable, `forEach`, `getSetCookie`) |
-| `rawHeaders` | `FetchHeaders` | Native collection preserving the server's **original casing and order** |
-| `text()` | `Promise<string>` | Lossy UTF-8 decode (invalid bytes → U+FFFD), like WHATWG |
-| `json()` | `Promise<any>` | |
-| `bytes()` | `Promise<Uint8Array>` | |
-| `blob()` | `Promise<Blob>` | Typed from the response `Content-Type` |
-| `arrayBuffer()` | `Promise<ArrayBuffer>` | A real Web `ArrayBuffer` |
+| Member          | Type                   | Notes                                                                                       |
+| --------------- | ---------------------- | ------------------------------------------------------------------------------------------- |
+| `status`        | `number`               |                                                                                             |
+| `statusText`    | `string`               | Canonical reason phrase from the `http` crate, not the literal wire bytes (HTTP/2 has none) |
+| `ok`            | `boolean`              | `status` in `200..299`                                                                      |
+| `url`           | `string`               | Final URL after redirects                                                                   |
+| `redirected`    | `boolean`              | Final URL differs from requested                                                            |
+| `bodyUsed`      | `boolean`              | `true` once any accessor ran (advisory — bodies are re-readable)                            |
+| `headers`       | `Headers`              | WHATWG `Headers` (iterable, `forEach`, `getSetCookie`)                                      |
+| `rawHeaders`    | `FetchHeaders`         | Native collection preserving the server's **original casing and order**                     |
+| `text()`        | `Promise<string>`      | Lossy UTF-8 decode (invalid bytes → U+FFFD), like WHATWG                                    |
+| `json()`        | `Promise<any>`         |                                                                                             |
+| `bytes()`       | `Promise<Uint8Array>`  |                                                                                             |
+| `blob()`        | `Promise<Blob>`        | Typed from the response `Content-Type`                                                      |
+| `arrayBuffer()` | `Promise<ArrayBuffer>` | A real Web `ArrayBuffer`                                                                    |
 
 Because the body is buffered in memory, accessors are **re-readable** — a real
 WHATWG stream throws on the second read; here it works, so you rarely need

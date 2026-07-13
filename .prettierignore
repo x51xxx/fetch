@@ -1,0 +1,11 @@
+node_modules
+target
+npm
+*.node
+pnpm-lock.yaml
+binding.js
+binding.d.ts
+bench/report-data.json
+bench/results
+docs/benchmark-report.html
+CHANGELOG.md
