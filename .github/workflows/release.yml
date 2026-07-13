@@ -1,0 +1,90 @@
+name: Release
+
+# Push a tag like `v1.0.1` (matching the version in package.json) to build
+# every target, assemble the platform packages, and publish everything to
+# npm: the main @trishchuk/fetch package plus one @trishchuk/fetch-<platform>
+# package per target in npm.targets, wired together via optionalDependencies
+# (see index.js's binary-loading logic and package.json).
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # napi pre-publish --gh-release creates a GitHub Release
+      id-token: write # npm publish --provenance needs an OIDC token
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches package.json version
+        if: github.event_name == 'push'
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(node -p "require('./package.json').version")"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME (version $tag_version) does not match package.json version $pkg_version"
+            exit 1
+          fi
+
+      # Each build job uploaded its `.node` as `bindings-<target>`; this
+      # downloads them all into artifacts/bindings-<target>/*.node, matching
+      # what `napi artifacts` (next step) expects.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bindings-*
+          path: artifacts
+
+      # Copies each artifacts/bindings-<target>/*.node into its
+      # npm/<platform>/ package directory (verified locally: reads
+      # artifacts/bindings-<target>/*.node, writes npm/<platform>/*.node).
+      - run: pnpm exec napi artifacts --output-dir artifacts
+
+      - name: Verify every target produced a binary
+        run: |
+          missing=0
+          for dir in npm/*/; do
+            if ! find "$dir" -name '*.node' -print -quit | grep -q .; then
+              echo "::error::$dir has no .node binary -- a build job likely failed silently"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      # Updates each npm/<platform>/package.json version to match the root
+      # package.json, and adds/refreshes root package.json's
+      # optionalDependencies to point at them.
+      - run: pnpm exec napi pre-publish --tagstyle npm --gh-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish platform packages
+        run: |
+          for dir in npm/*/; do
+            npm publish "$dir" --access public --provenance
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish main package
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

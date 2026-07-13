@@ -1,0 +1,18 @@
+{
+  "name": "@trishchuk/fetch-win32-x64-msvc",
+  "version": "1.0.0",
+  "cpu": [
+    "x64"
+  ],
+  "main": "fetch.win32-x64-msvc.node",
+  "files": [
+    "fetch.win32-x64-msvc.node"
+  ],
+  "description": "Fetch API-shaped HTTP client for Node.js (buffered bodies, no streaming yet), backed by a Rust (wreq/hyper/BoringSSL) native addon with TLS/HTTP2 fingerprint emulation",
+  "keywords": [],
+  "author": "Taras Trishchuk",
+  "license": "MIT",
+  "os": [
+    "win32"
+  ]
+}

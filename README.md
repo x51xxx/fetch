@@ -15,14 +15,24 @@ happens to have a `fetch()`-shaped API. If you don't need fingerprint control,
 toolchain, no BoringSSL). Use this when the *shape of your TLS handshake* is
 part of what you're testing or evading detection on.
 
-It is **not** a drop-in `fetch` replacement — request bodies are buffered
-strings only, there is no `ReadableStream`, and the surface area is
-deliberately small. See [Known limitations](#known-limitations).
+It follows the WHATWG `fetch(input, init)` shape: `input` can be a URL string,
+a `URL`, or a `Request`-like object; request bodies accept `string`,
+`Uint8Array`/`Buffer`, `ArrayBuffer`, typed arrays, `URLSearchParams`, and
+`Blob`; request headers accept a `Headers` instance, an array of pairs, or a
+plain object; and the response carries a WHATWG `Headers` plus
+`text()`/`json()`/`arrayBuffer()`/`bytes()`/`blob()`. It is still **not** a
+full drop-in replacement, though — bodies are buffered (no `ReadableStream` in
+either direction), and `FormData`/multipart, streaming, and `AbortSignal`
+aren't wired up yet. See [Known limitations](#known-limitations), and
+[`docs/fetch-compatibility.md`](./docs/fetch-compatibility.md) for the precise
+compatibility matrix and a migration guide from native `fetch`/`undici`.
 
 ## Install / build
 
-This package has no published prebuilt binaries yet — you build the native
-addon locally. You need:
+Once published (see [Releasing](#releasing)), `npm install @trishchuk/fetch`
+pulls a prebuilt `.node` binary for your platform via
+`optionalDependencies` — no Rust toolchain needed. Until then, or if you're
+working on this repo, build the native addon locally. You need:
 
 - Node.js (tested on Node 24)
 - [pnpm](https://pnpm.io) (`packageManager: pnpm@10.26.2` in `package.json`)
@@ -50,8 +60,9 @@ pnpm test
 ```
 
 Both build commands emit a platform-specific binary (e.g.
-`fetch.darwin-arm64.node`) next to `index.js`, which `index.js` loads at
-require time. `napi.targets` in `package.json` lists the platforms this crate
+`fetch.darwin-arm64.node`) plus the generated loader `binding.js` /
+`binding.d.ts`, which the hand-authored `index.js` wrapper loads at require
+time. `napi.targets` in `package.json` lists the platforms this crate
 is set up to cross-compile for; you still need the matching Rust target
 installed to actually build one.
 
@@ -108,6 +119,35 @@ const created = await fetch('https://example.com/api/items', {
   impersonate: 'safari_26',
 })
 console.log(created.status, await created.json())
+```
+
+The call follows the WHATWG `fetch(input, init)` shape, so the inputs and body
+types you'd reach for with native `fetch` mostly just work:
+
+```js
+// A URL object or a Request-like input, not just a string
+await fetch(new URL('https://example.com/page'))
+await fetch(new Request('https://example.com/api', { method: 'POST', body: 'hi' }))
+
+// Form-encoded body (Content-Type is set for you)
+await fetch('https://example.com/login', {
+  method: 'POST',
+  body: new URLSearchParams({ user: 'a', pass: 'b' }),
+})
+
+// Binary body (Uint8Array / Buffer / ArrayBuffer / typed arrays / Blob)
+await fetch('https://example.com/upload', {
+  method: 'PUT',
+  headers: { 'content-type': 'application/octet-stream' },
+  body: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+})
+
+// Headers as a Headers instance or an array of pairs, and richer response reads
+const res = await fetch('https://example.com/data', {
+  headers: new Headers({ accept: 'application/json' }),
+})
+res.headers.get('content-type') // WHATWG Headers (iterable, forEach, get)
+const bytes = await res.bytes() // Uint8Array; also blob(), arrayBuffer(), text(), json()
 ```
 
 ### 2. Picking a curl-impersonate preset and inspecting what it resolves to
@@ -241,21 +281,29 @@ even if `impersonate`/`session` otherwise match.
 
 ## API reference
 
-Mirrors `index.d.ts` (generated from `src/lib.rs` doc comments); field names
-here are the camelCase names you use from JS.
+The public API is the ergonomic wrapper in `index.js` (typed by the
+hand-authored `index.d.ts`), which wraps the NAPI-generated native binding
+(`binding.js` / `binding.d.ts`, produced from `src/lib.rs`). Field names here
+are the camelCase names you use from JS. For how this compares to native
+`fetch` field by field — plus a migration guide — see
+[`docs/fetch-compatibility.md`](./docs/fetch-compatibility.md).
 
-### `fetch(url, options?) => Promise<FetchResponse>`
+### `fetch(input, init?) => Promise<FetchResponse>`
 
-The only entry point. `url` is a full URL string. `options` is a
-`FetchOptions` object; every field is optional.
+The main entry point, shaped like WHATWG `fetch`. `input` is a full URL
+string, a `URL`, or a `Request`-like object (anything with a string `url`;
+its `method`/`headers`/`body` are read and its body is buffered). `init` is
+the option bag below — WHATWG fields (`method`, `headers`, `body`) plus this
+package's fingerprint/transport options. When both `input` (a `Request`) and
+`init` supply the same field, `init` wins. Every field is optional.
 
-### `FetchOptions`
+### `FetchInit`
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `method` | `string` | `"GET"` | HTTP method. |
-| `headers` | `Record<string, string>` | none | Request headers. One value per key (no repeated-header support). |
-| `body` | `string` | none | Request body. **String only** — no `Buffer`, `FormData`, or streams. |
+| `headers` | `Headers \| [string,string][] \| Record<string,string>` | none | Request headers as a `Headers` instance, an array of pairs, or a plain object. Case-insensitive duplicate names are combined with `", "` the way `Headers` does. |
+| `body` | `string \| Uint8Array \| ArrayBuffer \| ArrayBufferView \| URLSearchParams \| Blob` | none | Request body. `URLSearchParams` and `Blob` also set a default `Content-Type` (form-urlencoded / the blob's `type`) unless you set one. **No `FormData`/multipart or streams** — see [Known limitations](#known-limitations). |
 | `impersonate` | `string` | `"chrome_147"` | Fingerprint to emulate: a native `wreq-util` profile name (`"chrome_147"`, `"safari_26"`, `"firefox_142"`), a curl-impersonate preset name (`"chrome116"`, `"ff109"`, `"safari15_5"` — see `listImpersonatePresets()`), or `"random"` / `"weighted_random"`. |
 | `platform` | `string` | profile default | Declared OS for User-Agent/client-hint headers: `"windows"`, `"macos"`, `"linux"`, `"android"`, or `"ios"`. Client-level; has no effect for random profiles. |
 | `proxy` | `string` | none | Proxy URL for this request (`http://`, `https://`, or `socks5://`, with optional userinfo). Applied per request; does not affect client-cache reuse. |
@@ -282,15 +330,21 @@ affect caching.
 | `ok` | `boolean` (readonly) | `true` iff `status` is in `200..299`. |
 | `url` | `string` (readonly) | Final URL after following redirects. |
 | `redirected` | `boolean` (readonly) | `true` iff the final URL differs from the requested one. |
-| `headers` | `FetchHeaders` (getter) | Response headers. See below — **not** a plain object. |
-| `text()` | `Promise<string>` | Body decoded as UTF-8. Rejects if the body isn't valid UTF-8. |
+| `bodyUsed` | `boolean` (readonly) | `true` once any body accessor has run. Advisory — because the body is buffered, accessors are re-readable and don't throw on a second call (see below). |
+| `headers` | `Headers` (getter) | Response headers as a WHATWG `Headers` (iterable, `forEach`, `getSetCookie`, case-insensitive `get`/`has`). |
+| `rawHeaders` | `FetchHeaders` (getter) | The native header collection, preserving the server's **original casing and order** (which WHATWG `Headers` lower-cases and sorts away — kept for fingerprint work). See below. |
+| `text()` | `Promise<string>` | Body decoded as UTF-8 (lossy, like WHATWG — invalid bytes become U+FFFD). |
 | `json()` | `Promise<any>` | Body parsed as JSON. Rejects on invalid JSON. |
-| `arrayBuffer()` | `Promise<Buffer>` | Raw body bytes as a Node `Buffer` (not a Web `ArrayBuffer` — close enough for most consumers, but note the type if you're doing strict Fetch-API compatibility checks). |
+| `bytes()` | `Promise<Uint8Array>` | Raw body bytes as a `Uint8Array`. |
+| `blob()` | `Promise<Blob>` | Body as a `Blob`, typed from the response `Content-Type`. |
+| `arrayBuffer()` | `Promise<ArrayBuffer>` | Raw body bytes as a real Web `ArrayBuffer`. |
 
-All three body accessors are **async**, unlike a naive "already buffered so
-just return it" design — the response body is fully read before `fetch()`
-resolves, but the accessors still return `Promise`s to keep the shape
-familiar and leave room for future streaming.
+All body accessors are **async** — the response body is fully read before
+`fetch()` resolves, but the accessors return `Promise`s to keep the WHATWG
+shape. Because the body is buffered in memory, accessors are **re-readable**:
+calling `text()` then `json()` on the same response works (a real WHATWG
+stream would throw on the second read). `bodyUsed` still flips to `true` after
+the first read so code that checks it behaves sensibly.
 
 ### `clearSession(session) => number`
 
@@ -348,9 +402,19 @@ hand-tuned in practice).
   direction. Response bodies are capped at 32 MiB by default; use
   `maxResponseBytes` to select a different explicit bound. Large payloads
   (multi-GB downloads/uploads) are not a good fit.
-- **Request body is a string, full stop.** No `Buffer`, no `FormData`/
-  multipart, no streaming upload. If you need to send binary or multipart
-  data, this library doesn't support it yet.
+- **No `FormData`/multipart request bodies.** Strings, `Uint8Array`/`Buffer`,
+  `ArrayBuffer`, typed arrays, `URLSearchParams`, and `Blob` all work, but
+  passing a `FormData` **throws**. A generic multipart serialization (its
+  boundary token, part order, and header casing) is itself fingerprintable and
+  would diverge from what the impersonated browser sends — the same reason
+  `tlsOptions` is opt-in. Serialize multipart yourself and pass the bytes if
+  you need it, or track this as a planned "match the browser's multipart"
+  feature. Streaming upload (a `ReadableStream` body) is likewise unsupported.
+- **No `AbortSignal` yet.** Passing `signal` has no effect; there's no
+  in-flight cancellation. Real cancellation needs the abort wired down into the
+  native request future (so the `wreq` request is actually dropped, not just
+  the JS promise rejected) — planned, not yet done. Use `timeoutMs` for a hard
+  deadline in the meantime.
 - **`tlsOptions` genuinely diverges the fingerprint.** It composes with
   `impersonate` rather than clobbering it (unset fields keep the profile's
   values), but every field you *do* set is, by construction, no longer what
@@ -359,8 +423,10 @@ hand-tuned in practice).
 - **No cookie access outside sessions.** Cookies are only observable as a side
   effect of reusing a `session`; there's no API to read/set/clear individual
   cookies directly.
-- **No per-request header repetition.** `headers` is `Record<string,
-  string>` — you can't send the same header name twice.
+- **No per-request header repetition.** You can pass a `Headers`, an array of
+  pairs, or an object, but case-insensitive duplicate names are **combined**
+  with `", "` (WHATWG `Headers` semantics) before the request goes out — you
+  can't send the same header name as two separate lines on the wire.
 - **`statusText` honesty note.** It's the canonical reason phrase from the
   `http` crate's status table, not necessarily the literal bytes on the wire
   (HTTP/2 doesn't have a wire reason phrase at all). Low-stakes, but don't
@@ -469,3 +535,42 @@ Other empirically confirmed facts (against `tls.peet.ws`, not mocked):
   also reports a passive TCP/IP fingerprint (p0f-style: TTL, window size,
   option order → OS guess), which is how the TCP/IP limitation above was
   found — see [Known limitations](#known-limitations).
+
+## CI / Releasing
+
+`.github/workflows/build.yml` is a reusable workflow that builds every
+target in `napi.targets` (macOS arm64/x64, Linux x64/arm64-gnu, Windows x64)
+and uploads each `.node` binary as a `bindings-<target>` artifact, running
+`pnpm test` on every target except `aarch64-unknown-linux-gnu` (cross-compiled
+on an x64 runner, not natively executable there — see the comment in
+`build.yml`; run the suite on real arm64 Linux before trusting that binary).
+
+- `ci.yml` calls it on every push/PR to `main`.
+- `release.yml` calls it on `v*` tags, then assembles the binaries into
+  `npm/<platform>/` (via `napi artifacts`), updates versions
+  (`napi pre-publish`), and `npm publish`es each platform package plus the
+  main `@trishchuk/fetch` package — the same `optionalDependencies` wiring
+  `binding.js`'s binary-loading logic already expects.
+
+To cut a release: bump `version` in `package.json`, commit, tag it
+`v<version>` (matching exactly — the workflow checks this and fails
+otherwise), and push the tag. Requires an `NPM_TOKEN` repository secret with
+publish rights to `@trishchuk/fetch*`; `GITHUB_TOKEN` (automatic) is used for
+the `napi pre-publish --gh-release` GitHub Release.
+
+None of this has been run against a real GitHub Actions runner yet — the
+workflows are `actionlint`-clean and `napi artifacts`'s artifact→npm-dir copy
+step was verified locally with a real `.node` binary, but a live end-to-end
+run (especially the Windows/BoringSSL and aarch64 cross-compile jobs, the
+riskiest parts) still needs to happen on an actual push before trusting a
+tagged release.
+
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTORS.md](CONTRIBUTORS.md)
+for who's already helped, and [CHANGELOG.md](CHANGELOG.md) for release
+history.
+
+## License
+
+[MIT](LICENSE) © Taras Trishchuk

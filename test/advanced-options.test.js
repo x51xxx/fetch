@@ -130,14 +130,19 @@ test('maxResponseBytes rejects a response before it can grow unbounded', async (
   )
 })
 
-test('case-only duplicate request headers are rejected', async () => {
+test('case-only duplicate request headers are combined (WHATWG), not rejected', async () => {
   await withServer(
-    (req, res) => res.end('should not be reached'),
+    (req, res) => {
+      res.writeHead(200, { 'content-type': 'text/plain' })
+      res.end(String(req.headers['x-request-id']))
+    },
     async (base) => {
-      await assert.rejects(
-        fetch(`${base}/headers`, { headers: { 'x-request-id': 'one', 'X-Request-Id': 'two' } }),
-        /duplicate header name/
-      )
+      // The wrapper folds case-insensitive duplicates the way `Headers` does,
+      // so the native layer never sees an ambiguous repeated header.
+      const res = await fetch(`${base}/headers`, {
+        headers: { 'x-request-id': 'one', 'X-Request-Id': 'two' },
+      })
+      assert.equal(await res.text(), 'one, two')
     }
   )
 })

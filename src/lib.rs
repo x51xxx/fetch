@@ -432,7 +432,12 @@ fn get_or_build_client(key: ClientKey) -> Result<Client> {
 pub struct FetchOptions {
     pub method: Option<String>,
     pub headers: Option<HashMap<String, String>>,
-    pub body: Option<String>,
+    /// Request body. Accepts either a UTF-8 string or raw bytes
+    /// (`Uint8Array`/`Buffer`). Higher-level shapes (`URLSearchParams`,
+    /// `Blob`, `ArrayBuffer`, typed arrays) are normalized to one of these two
+    /// by the JS wrapper before they reach here; `FormData`/multipart is not
+    /// supported (it would diverge the fingerprint — see README).
+    pub body: Option<Either<String, Uint8Array>>,
     /// Browser/client fingerprint to emulate. Accepts either a native
     /// wreq-util profile name ("chrome_147", "safari_26", "firefox_142"),
     /// a curl-impersonate preset name ("chrome116", "ff109", "safari15_5" —
@@ -709,7 +714,10 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
     }
 
     if let Some(body) = options.body {
-        builder = builder.body(body);
+        builder = match body {
+            Either::A(text) => builder.body(text),
+            Either::B(bytes) => builder.body(bytes.to_vec()),
+        };
     }
 
     if let Some(proxy_url) = options.proxy {

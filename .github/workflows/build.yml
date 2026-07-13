@@ -1,0 +1,123 @@
+name: Build
+
+# Reusable: builds every target in the matrix below and uploads each `.node`
+# binary as an artifact named `bindings-<target>`. Called by both ci.yml (on
+# every push/PR) and release.yml (on version tags), so the build matrix only
+# has to be maintained in one place.
+on:
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+  DEBUG: napi:*
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            testable: true
+          - host: macos-latest
+            target: x86_64-apple-darwin
+            # Cross-compiled from the arm64 macos-latest runner via Xcode's
+            # universal clang -- no separate x64 macOS runner needed. Tested
+            # via Rosetta 2 (see the Rosetta setup step below).
+            testable: true
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            testable: true
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            # Cross-compiled via crossbuild-essential-arm64 (same approach
+            # wreq's own CI uses for BoringSSL, see
+            # https://github.com/0x676e67/wreq/blob/main/.github/compilation-guide/build.yml).
+            # Not natively runnable on an x64 runner without QEMU, so this
+            # target is build-only here -- run the test suite on real arm64
+            # Linux (hardware or a native arm64 runner) before trusting it.
+            testable: false
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            testable: true
+    runs-on: ${{ matrix.host }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+          workspaces: . -> target
+
+      # Same dependency list wreq's own CI uses to compile BoringSSL via the
+      # btls crate on Linux: https://github.com/0x676e67/wreq#building
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake perl pkg-config libclang-dev
+
+      - name: Install aarch64 cross-compiler
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get install -y crossbuild-essential-arm64
+          {
+            echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc"
+            echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++"
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-g++"
+            echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8"
+          } >> "$GITHUB_ENV"
+
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: brew install cmake pkg-config llvm
+
+      # BoringSSL's Windows build needs Perl (codegen) and NASM (assembly
+      # crypto routines) in addition to cmake/llvm -- see the Windows job in
+      # wreq's own compilation guide (link above).
+      - name: Install Windows build dependencies
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          choco install cmake -y
+          choco install strawberryperl -y
+          choco install pkgconfiglite -y
+          choco install llvm -y
+          choco install nasm -y
+
+      - name: Set static CRT for Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build ${{ matrix.target }}
+        run: pnpm run build -- --target ${{ matrix.target }}
+
+      - name: Install Rosetta 2
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: softwareupdate --install-rosetta --agree-to-license
+
+      - name: Test
+        if: matrix.testable
+        run: pnpm test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.target }}
+          path: '*.node'
+          if-no-files-found: error

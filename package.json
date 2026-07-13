@@ -1,9 +1,31 @@
 {
   "name": "@trishchuk/fetch",
   "version": "1.0.0",
-  "description": "Fetch API-shaped HTTP client for Node.js (buffered bodies, no streaming yet), backed by a Rust (wreq/hyper/BoringSSL) native addon with TLS/HTTP2 fingerprint emulation",
+  "description": "Fetch API-shaped HTTP client for Node.js with TLS/HTTP2 fingerprint emulation (WHATWG-shaped call signature, URL/Request/Headers inputs, binary/URLSearchParams/Blob bodies; buffered, no streaming yet), backed by a Rust (wreq/hyper/BoringSSL) native addon",
   "main": "index.js",
   "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/x51xxx/fetch.git"
+  },
+  "homepage": "https://github.com/x51xxx/fetch#readme",
+  "bugs": {
+    "url": "https://github.com/x51xxx/fetch/issues"
+  },
+  "keywords": [
+    "fetch",
+    "http-client",
+    "tls-fingerprint",
+    "ja3",
+    "ja4",
+    "impersonate",
+    "curl-impersonate",
+    "napi-rs",
+    "boringssl"
+  ],
+  "engines": {
+    "node": ">=18.17.0"
+  },
   "napi": {
     "binaryName": "fetch",
     "targets": [
@@ -16,18 +38,28 @@
   },
   "files": [
     "index.js",
-    "index.d.ts"
+    "index.d.ts",
+    "binding.js",
+    "binding.d.ts"
   ],
   "scripts": {
-    "build": "napi build --platform --release",
-    "build:debug": "napi build --platform",
-    "test": "node --test test/*.test.js"
+    "build": "napi build --platform --release --js binding.js --dts binding.d.ts",
+    "build:debug": "napi build --platform --js binding.js --dts binding.d.ts",
+    "test": "node --test test/*.test.js",
+    "artifacts": "napi artifacts",
+    "prepublishOnly": "napi pre-publish -t npm"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Taras Trishchuk",
+  "license": "MIT",
   "packageManager": "pnpm@10.26.2",
   "devDependencies": {
     "@napi-rs/cli": "^3.7.2"
+  },
+  "optionalDependencies": {
+    "@trishchuk/fetch-darwin-arm64": "1.0.0",
+    "@trishchuk/fetch-darwin-x64": "1.0.0",
+    "@trishchuk/fetch-linux-x64-gnu": "1.0.0",
+    "@trishchuk/fetch-linux-arm64-gnu": "1.0.0",
+    "@trishchuk/fetch-win32-x64-msvc": "1.0.0"
   }
 }
