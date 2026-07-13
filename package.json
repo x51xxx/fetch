@@ -63,10 +63,10 @@
     "prettier": "^3.9.5"
   },
   "optionalDependencies": {
-    "@trishchuk/fetch-darwin-arm64": "1.0.0",
-    "@trishchuk/fetch-darwin-x64": "1.0.0",
-    "@trishchuk/fetch-linux-arm64-gnu": "1.0.0",
-    "@trishchuk/fetch-linux-x64-gnu": "1.0.0",
-    "@trishchuk/fetch-win32-x64-msvc": "1.0.0"
+    "@trishchuk/fetch-darwin-arm64": "workspace:*",
+    "@trishchuk/fetch-darwin-x64": "workspace:*",
+    "@trishchuk/fetch-linux-arm64-gnu": "workspace:*",
+    "@trishchuk/fetch-linux-x64-gnu": "workspace:*",
+    "@trishchuk/fetch-win32-x64-msvc": "workspace:*"
   }
 }

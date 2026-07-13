@@ -23,6 +23,32 @@ importers:
       prettier:
         specifier: ^3.9.5
         version: 3.9.5
+    optionalDependencies:
+      '@trishchuk/fetch-darwin-arm64':
+        specifier: workspace:*
+        version: link:npm/darwin-arm64
+      '@trishchuk/fetch-darwin-x64':
+        specifier: workspace:*
+        version: link:npm/darwin-x64
+      '@trishchuk/fetch-linux-arm64-gnu':
+        specifier: workspace:*
+        version: link:npm/linux-arm64-gnu
+      '@trishchuk/fetch-linux-x64-gnu':
+        specifier: workspace:*
+        version: link:npm/linux-x64-gnu
+      '@trishchuk/fetch-win32-x64-msvc':
+        specifier: workspace:*
+        version: link:npm/win32-x64-msvc
+
+  npm/darwin-arm64: {}
+
+  npm/darwin-x64: {}
+
+  npm/linux-arm64-gnu: {}
+
+  npm/linux-x64-gnu: {}
+
+  npm/win32-x64-msvc: {}
 
 packages:
 
