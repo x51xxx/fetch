@@ -1,5 +1,9 @@
 {
   "name": "@trishchuk/fetch-darwin-arm64",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/x51xxx/fetch.git"
+  },
   "version": "1.0.0",
   "cpu": [
     "arm64"

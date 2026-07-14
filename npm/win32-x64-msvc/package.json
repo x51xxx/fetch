@@ -1,5 +1,9 @@
 {
   "name": "@trishchuk/fetch-win32-x64-msvc",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/x51xxx/fetch.git"
+  },
   "version": "1.0.0",
   "cpu": [
     "x64"
