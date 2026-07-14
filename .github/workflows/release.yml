@@ -63,7 +63,7 @@ jobs:
           missing=0
           for dir in npm/*/; do
             if ! find "$dir" -name '*.node' -print -quit | grep -q .; then
-              echo "::error::$dir has no .node binary -- a build job likely failed silently"
+              echo "::error::$dir has no .node binary -- a build job produced a binary for the wrong target, or did not run"
               missing=1
             fi
           done
