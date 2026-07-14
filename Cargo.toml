@@ -9,6 +9,11 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
+# The Node-API level is the addon's ABI floor, which is a separate thing from
+# the supported-Node floor in package.json's `engines` (>=24). It stays at 9
+# deliberately: nothing here uses a Node-API 10 entry point, so raising it would
+# only narrow which runtimes can load the binary while buying nothing. Node 24
+# offers Node-API 10 and loads a napi9 addon fine.
 napi = { version = "3", default-features = false, features = ["napi9", "async", "tokio_rt", "serde-json"] }
 napi-derive = "3"
 wreq = { version = "6.0.0-rc.29", features = ["json", "cookies", "gzip", "brotli", "deflate", "charset", "socks", "stream"] }
