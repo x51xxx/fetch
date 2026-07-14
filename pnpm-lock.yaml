@@ -33,9 +33,15 @@ importers:
       '@trishchuk/fetch-linux-arm64-gnu':
         specifier: workspace:*
         version: link:npm/linux-arm64-gnu
+      '@trishchuk/fetch-linux-arm64-musl':
+        specifier: workspace:*
+        version: link:npm/linux-arm64-musl
       '@trishchuk/fetch-linux-x64-gnu':
         specifier: workspace:*
         version: link:npm/linux-x64-gnu
+      '@trishchuk/fetch-linux-x64-musl':
+        specifier: workspace:*
+        version: link:npm/linux-x64-musl
       '@trishchuk/fetch-win32-x64-msvc':
         specifier: workspace:*
         version: link:npm/win32-x64-msvc
@@ -46,7 +52,11 @@ importers:
 
   npm/linux-arm64-gnu: {}
 
+  npm/linux-arm64-musl: {}
+
   npm/linux-x64-gnu: {}
+
+  npm/linux-x64-musl: {}
 
   npm/win32-x64-msvc: {}
 

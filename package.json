@@ -33,6 +33,8 @@
       "x86_64-apple-darwin",
       "x86_64-unknown-linux-gnu",
       "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-musl",
       "x86_64-pc-windows-msvc"
     ]
   },
@@ -66,7 +68,9 @@
     "@trishchuk/fetch-darwin-arm64": "workspace:*",
     "@trishchuk/fetch-darwin-x64": "workspace:*",
     "@trishchuk/fetch-linux-arm64-gnu": "workspace:*",
+    "@trishchuk/fetch-linux-arm64-musl": "workspace:*",
     "@trishchuk/fetch-linux-x64-gnu": "workspace:*",
+    "@trishchuk/fetch-linux-x64-musl": "workspace:*",
     "@trishchuk/fetch-win32-x64-msvc": "workspace:*"
   }
 }

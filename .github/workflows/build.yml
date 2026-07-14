@@ -50,6 +50,33 @@ jobs:
             # target is build-only here -- run the test suite on real arm64
             # Linux (hardware or a native arm64 runner) before trusting it.
             testable: false
+          # musl targets are cross-compiled from this glibc runner rather than
+          # built natively in Alpine, which is the obvious-looking approach and
+          # does not work: napi always passes --target to cargo, and cargo never
+          # applies RUSTFLAGS to *host* units when --target is given. On an
+          # Alpine/rustup host that leaves every build script a static musl
+          # binary -- and btls-sys's build script has to dlopen libclang for
+          # bindgen, which a static binary cannot do ("Dynamic loading not
+          # supported"). Building from glibc keeps build scripts dynamically
+          # linked while the addon itself still links musl. Verified locally on
+          # both arches before landing; don't "simplify" this to Alpine.
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            platform: linux-x64-musl
+            musl_toolchain: x86_64-linux-musl-cross
+            musl_prefix: x86_64-linux-musl
+            # Cross-compiled against musl, so the runner's glibc Node cannot
+            # load it -- build-only here. Verified by hand in an amd64 Alpine
+            # container (loads, lists presets, completes a real HTTPS request
+            # through BoringSSL); re-check there rather than trusting CI alone.
+            testable: false
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            platform: linux-arm64-musl
+            musl_toolchain: aarch64-linux-musl-cross
+            musl_prefix: aarch64-linux-musl
+            testable: false
+
           - host: windows-latest
             target: x86_64-pc-windows-msvc
             platform: win32-x64-msvc
@@ -92,6 +119,48 @@ jobs:
             echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-g++"
             echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8"
           } >> "$GITHUB_ENV"
+
+      # musl-cross-make toolchain, which ships gcc *and* g++ for musl. Debian's
+      # musl-tools is not a substitute: it has musl-gcc but no g++, and
+      # BoringSSL is C++. napi hardcodes the linker name `aarch64-linux-musl-gcc`
+      # for the arm64 musl target (TARGET_LINKER in @napi-rs/cli
+      # src/utils/target.ts) -- that is this toolchain's naming convention, and
+      # is the clearest sign napi expects a glibc host + musl-cross setup. It
+      # has no entry for x86_64-unknown-linux-musl at all, so that one would
+      # silently link with the runner's glibc gcc; set the linker for both
+      # explicitly rather than relying on napi's table.
+      - name: Install musl cross toolchain
+        if: contains(matrix.target, 'musl')
+        run: |
+          # Download to a file rather than piping into tar: the default shell
+          # here is `bash -e` without pipefail, so `curl | tar` would swallow a
+          # failed download and hand tar an empty stream. -f turns HTTP errors
+          # into a non-zero exit; musl.cc is a single third-party host, so retry.
+          curl -fsSL --retry 3 --retry-delay 5 \
+            -o /tmp/musl-toolchain.tgz \
+            "https://musl.cc/${{ matrix.musl_toolchain }}.tgz"
+          sudo tar -xzf /tmp/musl-toolchain.tgz -C /opt
+          test -x "/opt/${{ matrix.musl_toolchain }}/bin/${{ matrix.musl_prefix }}-g++"
+          echo "/opt/${{ matrix.musl_toolchain }}/bin" >> "$GITHUB_PATH"
+          under="$(echo '${{ matrix.target }}' | tr '-' '_')"
+          upper="$(echo "$under" | tr '[:lower:]' '[:upper:]')"
+          sysroot="/opt/${{ matrix.musl_toolchain }}/${{ matrix.musl_prefix }}"
+          {
+            echo "CC_${under}=${{ matrix.musl_prefix }}-gcc"
+            echo "CXX_${under}=${{ matrix.musl_prefix }}-g++"
+            echo "AR_${under}=${{ matrix.musl_prefix }}-ar"
+            echo "CARGO_TARGET_${upper}_LINKER=${{ matrix.musl_prefix }}-gcc"
+            # bindgen shells out to clang for BoringSSL's headers and does NOT
+            # inherit the cc crate's compiler or sysroot -- left alone it reads
+            # the runner's *glibc* headers from /usr/include. arm64 fails loudly
+            # ("bits/libc-header-start.h file not found"); x64 silently generates
+            # bindings from glibc headers for a musl target, which is worse.
+            echo "BINDGEN_EXTRA_CLANG_ARGS_${under}=--target=${{ matrix.target }} --sysroot=${sysroot}"
+          } >> "$GITHUB_ENV"
+
+      - name: Set arm64 BoringSSL flag for musl
+        if: matrix.target == 'aarch64-unknown-linux-musl'
+        run: echo "CFLAGS_aarch64_unknown_linux_musl=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
 
       - name: Install macOS build dependencies
         if: runner.os == 'macOS'
