@@ -1,6 +1,6 @@
 {
   "name": "@trishchuk/fetch",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Fetch API-shaped HTTP client for Node.js with TLS/HTTP2 fingerprint emulation (WHATWG-shaped call signature, URL/Request/Headers inputs, binary/URLSearchParams/Blob bodies; buffered, no streaming yet), backed by a Rust (wreq/hyper/BoringSSL) native addon",
   "main": "index.js",
   "types": "index.d.ts",

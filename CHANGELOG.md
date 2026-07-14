@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-07-14
+
+First published release. 1.0.0 was tagged but never reached npm — its release
+run failed while assembling the platform packages (see the build fix below).
+
+### Fixed
+
+- Release build: cross-compiled targets are now built for the requested
+  platform. `pnpm run build -- --target <triple>` sent `--target` to Cargo
+  instead of napi, so both cross jobs silently built for the host and emitted a
+  wrong-named binary, leaving two platform packages empty and failing the
+  release. Each build now also asserts it produced `fetch.<platform>.node`.
+- `fetch(Request)` whose body was already consumed now throws `TypeError` per
+  WHATWG, instead of silently sending a bodyless request.
+- Response body pre-allocation no longer trusts `Content-Length`: a hostile
+  value can no longer abort the process. The hint is clamped to
+  `maxResponseBytes` and a 1 MiB ceiling.
+
+### Changed
+
+- `Response.bytes()` returns a view over the response buffer instead of copying
+  it.
+- Node 24 is now the minimum supported and CI-tested runtime.
+
+### Removed
+
+- Unused native `text()`/`json()` addon methods (the JS wrapper decodes off the
+  buffer directly).
+
 ## [1.0.0] - 2026-07-12
 
 ### Added
@@ -48,4 +77,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   against Node's built-in `fetch`, plus an HTML report and methodology
   writeup under `docs/`.
 
+[1.0.1]: https://github.com/x51xxx/fetch/releases/tag/v1.0.1
 [1.0.0]: https://github.com/x51xxx/fetch/releases/tag/v1.0.0

@@ -70,9 +70,19 @@ jobs:
           exit $missing
 
       # Updates each npm/<platform>/package.json version to match the root
-      # package.json, and adds/refreshes root package.json's
-      # optionalDependencies to point at them.
-      - run: pnpm exec napi pre-publish --tagstyle npm --gh-release
+      # package.json, and rewrites root package.json's optionalDependencies
+      # from `workspace:*` (a pnpm-only spec npm can't resolve) to the exact
+      # published version.
+      #
+      # --skip-optional-publish is required: without it, pre-publish ALSO runs
+      # `npm publish` in each npm/<platform>/ itself -- with no `--access
+      # public`, so the first publish of these scoped packages would fail
+      # outright -- and the explicit "Publish platform packages" step below
+      # would then try to publish the same versions a second time. We let that
+      # step own all publishing so every package goes out with --access public
+      # --provenance. The GitHub release and .node asset uploads still happen
+      # here (they're outside the skipped publish path).
+      - run: pnpm exec napi pre-publish --tagstyle npm --gh-release --skip-optional-publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
