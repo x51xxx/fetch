@@ -626,18 +626,11 @@ impl FetchResponse {
         }
     }
 
-    #[napi]
-    pub async fn text(&self) -> Result<String> {
-        String::from_utf8(self.body.clone())
-            .map_err(|e| Error::new(Status::GenericFailure, format!("invalid utf-8 body: {e}")))
-    }
-
-    #[napi]
-    pub async fn json(&self) -> Result<serde_json::Value> {
-        serde_json::from_slice(&self.body)
-            .map_err(|e| Error::new(Status::GenericFailure, format!("invalid json body: {e}")))
-    }
-
+    // Decoding to string/JSON deliberately lives in the JS wrapper (index.js),
+    // which does it straight off this Buffer. Native `text`/`json` used to be
+    // exported here too, but nothing called them: they cost an extra body copy
+    // plus a Rust->V8 conversion of the decoded result, so keeping a second,
+    // unused decode path was pure surface area.
     #[napi]
     pub async fn array_buffer(&self) -> Result<Buffer> {
         Ok(self.body.clone().into())
@@ -763,8 +756,22 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
     let max_response_bytes = options
         .max_response_bytes
         .unwrap_or(DEFAULT_MAX_RESPONSE_BYTES) as usize;
+    // Pre-size the buffer so a large body doesn't repeatedly realloc+memcpy as
+    // it streams in. Content-Length is attacker-controlled, though, so it is a
+    // hint and never a promise: a hostile server advertising 10 GB must not be
+    // able to make us allocate 10 GB up front. Clamp to what we would actually
+    // accept anyway, and to a ceiling that keeps a lying header cheap -- honest
+    // bodies past the ceiling just grow the Vec as before. `content_length()`
+    // is None for chunked and for decompressed (gzip/br) bodies, which simply
+    // falls back to starting empty.
+    const PREALLOC_CEILING: u64 = 1024 * 1024;
+    let prealloc = response
+        .content_length()
+        .map(|cl| cl.min(max_response_bytes as u64).min(PREALLOC_CEILING) as usize)
+        .unwrap_or(0);
+
     let mut stream = response.bytes_stream();
-    let mut body = Vec::new();
+    let mut body = Vec::with_capacity(prealloc);
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| {
             Error::new(

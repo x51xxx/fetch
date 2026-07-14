@@ -161,11 +161,20 @@ async function fetch(input, init) {
   } else if (
     requestObj &&
     typeof requestObj.arrayBuffer === 'function' &&
-    requestObj.bodyUsed !== true &&
     method !== 'GET' &&
     method !== 'HEAD' &&
     method !== undefined
   ) {
+    // WHATWG: reusing a `Request` whose body was already read is a TypeError.
+    // Only reachable when `init.body` was not given -- an explicit body takes
+    // the branch above and legitimately ignores the Request's own body, so it
+    // must not throw here. `bodyUsed` is only true for a non-null body that has
+    // been read, so a bodyless POST does not trip this.
+    if (requestObj.bodyUsed === true) {
+      throw new TypeError(
+        'Cannot construct a Request with a Request object whose body has already been used.'
+      )
+    }
     // A `Request` carried a body (its `.body` is a stream) — buffer it.
     const buffered = await requestObj.arrayBuffer()
     if (buffered && buffered.byteLength > 0) bodyValue = new Uint8Array(buffered)
@@ -269,7 +278,12 @@ class FetchResponse {
 
   async bytes() {
     const buf = await this.#consume()
-    return new Uint8Array(buf)
+    // Viewing rather than copying is only safe because the native side hands
+    // back a freshly-cloned, standalone Buffer per call (`FetchResponse::
+    // array_buffer` in src/lib.rs), so this aliases neither the response's
+    // internal body nor Node's shared Buffer pool. If that clone ever becomes
+    // zero-copy, this has to go back to copying.
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
   }
 
   async text() {
