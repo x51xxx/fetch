@@ -18,20 +18,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `platform` is napi's name for the target (and the npm/<platform>/
+          # package directory); the build step asserts the emitted binary is
+          # actually named fetch.<platform>.node.
           - host: macos-latest
             target: aarch64-apple-darwin
+            platform: darwin-arm64
             testable: true
           - host: macos-latest
             target: x86_64-apple-darwin
+            platform: darwin-x64
             # Cross-compiled from the arm64 macos-latest runner via Xcode's
-            # universal clang -- no separate x64 macOS runner needed. Tested
-            # via Rosetta 2 (see the Rosetta setup step below).
-            testable: true
+            # universal clang -- no separate x64 macOS runner needed.
+            # Build-only: the runner's Node is arm64, and an arm64 Node cannot
+            # load an x64 .node addon. Rosetta 2 does not help -- it runs x64
+            # *processes*, but `pnpm test` still launches the arm64 Node. To
+            # actually test this target, add a second setup-node with
+            # `architecture: x64` and run the suite under `arch -x86_64`.
+            testable: false
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            platform: linux-x64-gnu
             testable: true
           - host: ubuntu-latest
             target: aarch64-unknown-linux-gnu
+            platform: linux-arm64-gnu
             # Cross-compiled via crossbuild-essential-arm64 (same approach
             # wreq's own CI uses for BoringSSL, see
             # https://github.com/0x676e67/wreq/blob/main/.github/compilation-guide/build.yml).
@@ -41,6 +52,7 @@ jobs:
             testable: false
           - host: windows-latest
             target: x86_64-pc-windows-msvc
+            platform: win32-x64-msvc
             testable: true
     runs-on: ${{ matrix.host }}
     steps:
@@ -105,12 +117,30 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # No `--` before `--target`: pnpm forwards `--` literally to the script,
+      # and napi treats everything after it as cargo passthrough. That left
+      # napi's own --target undefined, so it silently built for the *host* and
+      # named the output after the host platform -- the x64 macOS job emitted
+      # fetch.darwin-arm64.node, and the arm64 Linux job emitted
+      # fetch.linux-x64-gnu.node. Args passed without `--` reach napi itself.
       - name: Build ${{ matrix.target }}
-        run: pnpm run build -- --target ${{ matrix.target }}
+        run: pnpm run build --target ${{ matrix.target }}
 
-      - name: Install Rosetta 2
-        if: matrix.target == 'x86_64-apple-darwin'
-        run: softwareupdate --install-rosetta --agree-to-license
+      # napi derives the output filename from the target it actually compiled
+      # for, so asserting the name catches a build that silently fell back to
+      # the host. That fallback is what broke the v1.0.0 release: two platform
+      # packages ended up with no binary, and only release.yml's pre-publish
+      # check caught it -- after the whole matrix had already gone green.
+      - name: Verify the binary matches the target
+        shell: bash
+        run: |
+          expected="fetch.${{ matrix.platform }}.node"
+          if [ ! -f "$expected" ]; then
+            echo "::error::expected $expected, got: $(ls -1 ./*.node 2>/dev/null | tr '\n' ' ')"
+            echo "::error::napi built for the wrong target -- check that --target reached napi, not cargo"
+            exit 1
+          fi
+          echo "ok: $expected"
 
       - name: Test
         if: matrix.testable
