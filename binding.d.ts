@@ -15,8 +15,6 @@ export declare class FetchResponse {
   readonly url: string
   readonly redirected: boolean
   get headers(): FetchHeaders
-  text(): Promise<string>
-  json(): Promise<any>
   arrayBuffer(): Promise<Buffer>
 }
 
