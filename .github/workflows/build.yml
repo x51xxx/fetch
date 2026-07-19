@@ -63,8 +63,6 @@ jobs:
           - host: ubuntu-latest
             target: x86_64-unknown-linux-musl
             platform: linux-x64-musl
-            musl_toolchain: x86_64-linux-musl-cross
-            musl_prefix: x86_64-linux-musl
             # Cross-compiled against musl, so the runner's glibc Node cannot
             # load it -- build-only here. Verified by hand in an amd64 Alpine
             # container (loads, lists presets, completes a real HTTPS request
@@ -73,8 +71,6 @@ jobs:
           - host: ubuntu-latest
             target: aarch64-unknown-linux-musl
             platform: linux-arm64-musl
-            musl_toolchain: aarch64-linux-musl-cross
-            musl_prefix: aarch64-linux-musl
             testable: false
 
           - host: windows-latest
@@ -107,7 +103,10 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake perl pkg-config libclang-dev
+          # xz-utils backs `tar -xJf` for the musl toolchain below; it is
+          # present on current runner images, but the build must not silently
+          # depend on that staying true.
+          sudo apt-get install -y build-essential cmake perl pkg-config libclang-dev xz-utils
 
       - name: Install aarch64 cross-compiler
         if: matrix.target == 'aarch64-unknown-linux-gnu'
@@ -122,34 +121,65 @@ jobs:
 
       # musl-cross-make toolchain, which ships gcc *and* g++ for musl. Debian's
       # musl-tools is not a substitute: it has musl-gcc but no g++, and
-      # BoringSSL is C++. napi hardcodes the linker name `aarch64-linux-musl-gcc`
-      # for the arm64 musl target (TARGET_LINKER in @napi-rs/cli
-      # src/utils/target.ts) -- that is this toolchain's naming convention, and
-      # is the clearest sign napi expects a glibc host + musl-cross setup. It
-      # has no entry for x86_64-unknown-linux-musl at all, so that one would
-      # silently link with the runner's glibc gcc; set the linker for both
-      # explicitly rather than relying on napi's table.
+      # BoringSSL is C++.
+      #
+      # Source is cross-tools/musl-cross on GitHub Releases, NOT musl.cc.
+      # musl.cc is a single self-hosted box on a consumer ISP (216.82.192.11,
+      # Grande Communications) that blackholes GitHub's runner ranges: every
+      # musl job ever run here died with `curl: (28) Failed to connect ...
+      # after ~133s` (a full SYN-retry ladder, i.e. no response at all) while
+      # the same host answered instantly from a normal connection. Retries
+      # only multiplied the timeout. GitHub Releases sit on the same CDN the
+      # runner already talks to, so that failure mode cannot recur.
+      #
+      # These tarballs name binaries with the FULL target triple
+      # (aarch64-unknown-linux-musl-gcc), where musl.cc used a short prefix
+      # (aarch64-linux-musl-gcc) -- which happens to be the name napi
+      # hardcodes for the arm64 musl target (TARGET_LINKER in @napi-rs/cli).
+      # That is safe: napi only injects its own linker when the cargo linker
+      # env var is unset (`if (linker && !process.env[linkerEnv])`, see
+      # @napi-rs/cli dist/cli.js), and the explicit exports below always set
+      # it. napi has no entry for x86_64-unknown-linux-musl at all, so that
+      # one would otherwise silently link with the runner's glibc gcc --
+      # another reason to set both explicitly rather than trust napi's table.
       - name: Install musl cross toolchain
         if: contains(matrix.target, 'musl')
+        env:
+          # Pin the toolchain build for reproducibility; bump deliberately.
+          MUSL_CROSS_RELEASE: '20260515'
         run: |
+          base="https://github.com/cross-tools/musl-cross/releases/download/${MUSL_CROSS_RELEASE}"
           # Download to a file rather than piping into tar: the default shell
           # here is `bash -e` without pipefail, so `curl | tar` would swallow a
           # failed download and hand tar an empty stream. -f turns HTTP errors
-          # into a non-zero exit; musl.cc is a single third-party host, so retry.
+          # into a non-zero exit.
           curl -fsSL --retry 3 --retry-delay 5 \
-            -o /tmp/musl-toolchain.tgz \
-            "https://musl.cc/${{ matrix.musl_toolchain }}.tgz"
-          sudo tar -xzf /tmp/musl-toolchain.tgz -C /opt
-          test -x "/opt/${{ matrix.musl_toolchain }}/bin/${{ matrix.musl_prefix }}-g++"
-          echo "/opt/${{ matrix.musl_toolchain }}/bin" >> "$GITHUB_PATH"
+            -o /tmp/musl-toolchain.tar.xz \
+            "${base}/${{ matrix.target }}.tar.xz"
+          # The .sha256 asset holds the bare hash, so pair it with the path
+          # ourselves. This is a third-party binary toolchain that ends up
+          # linked into a published artifact -- verify it.
+          curl -fsSL --retry 3 --retry-delay 5 \
+            -o /tmp/musl-toolchain.sha256 \
+            "${base}/${{ matrix.target }}.tar.xz.sha256"
+          echo "$(cat /tmp/musl-toolchain.sha256)  /tmp/musl-toolchain.tar.xz" \
+            | sha256sum -c -
+          sudo tar -xJf /tmp/musl-toolchain.tar.xz -C /opt
+          test -x "/opt/${{ matrix.target }}/bin/${{ matrix.target }}-g++"
+          echo "/opt/${{ matrix.target }}/bin" >> "$GITHUB_PATH"
           under="$(echo '${{ matrix.target }}' | tr '-' '_')"
           upper="$(echo "$under" | tr '[:lower:]' '[:upper:]')"
-          sysroot="/opt/${{ matrix.musl_toolchain }}/${{ matrix.musl_prefix }}"
+          # The libc headers live in <triple>/sysroot/usr/include, NOT in
+          # <triple>/include -- that one holds only the C++ headers. Getting
+          # this wrong is not a loud failure on every arch (see the bindgen
+          # note below), so assert the C headers are really there.
+          sysroot="/opt/${{ matrix.target }}/${{ matrix.target }}/sysroot"
+          test -f "${sysroot}/usr/include/stdio.h"
           {
-            echo "CC_${under}=${{ matrix.musl_prefix }}-gcc"
-            echo "CXX_${under}=${{ matrix.musl_prefix }}-g++"
-            echo "AR_${under}=${{ matrix.musl_prefix }}-ar"
-            echo "CARGO_TARGET_${upper}_LINKER=${{ matrix.musl_prefix }}-gcc"
+            echo "CC_${under}=${{ matrix.target }}-gcc"
+            echo "CXX_${under}=${{ matrix.target }}-g++"
+            echo "AR_${under}=${{ matrix.target }}-ar"
+            echo "CARGO_TARGET_${upper}_LINKER=${{ matrix.target }}-gcc"
             # bindgen shells out to clang for BoringSSL's headers and does NOT
             # inherit the cc crate's compiler or sysroot -- left alone it reads
             # the runner's *glibc* headers from /usr/include. arm64 fails loudly
