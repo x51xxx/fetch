@@ -30,7 +30,8 @@ yet. For the conceptual overview and the fingerprint-specific use cases, see the
 | `res.body` (`ReadableStream`)                                | ✅              | ❌                 | Buffered; no streaming download                         |
 | `res.clone()` / `res.formData()` / `res.type`                | ✅              | ❌                 | `clone()` rarely needed (re-readable)                   |
 | `AbortSignal` (`init.signal`)                                | ✅              | ❌ no-op           | Use `timeoutMs`; real cancel is planned                 |
-| `redirect` / `credentials` / `mode` / `cache`                | ✅              | ❌                 | Always follows redirects; no browser context            |
+| `redirect`                                                   | ✅              | ✅                 | `follow`, `manual`, and `error`; defaults to `follow`   |
+| `credentials` / `mode` / `cache`                             | ✅              | ❌                 | No browser context                                      |
 | **TLS/HTTP2 fingerprint control**                            | ❌              | ✅                 | The whole point — `impersonate`, `tlsOptions`, …        |
 
 ## Call signature and inputs
@@ -45,7 +46,8 @@ fetch(input: string | URL | RequestLike, init?: FetchInit): Promise<FetchRespons
 - a **`URL`** — `fetch(new URL('https://example.com/path'))`
 - a **`Request`-like** object — anything with a string `url` (a global
   `Request`, or your own `{ url, method, headers, body }`). Its `method`,
-  `headers`, and `body` are read; the body is buffered via `arrayBuffer()`.
+  `headers`, `redirect`, and `body` are read; the body is buffered via
+  `arrayBuffer()`.
 
 When both a `Request` and `init` supply the same field, **`init` wins** (WHATWG
 precedence):
@@ -59,16 +61,17 @@ await fetch(req, { method: 'POST', body: 'b' }) // → POST with body "b"
 
 `init` carries the WHATWG fields the wrapper understands **plus** this package's
 fingerprint/transport options. Unknown WHATWG fields (`mode`, `credentials`,
-`cache`, `integrity`, `referrer`, `keepalive`, `redirect`, `signal`) are
+`cache`, `integrity`, `referrer`, `keepalive`, `signal`) are
 accepted but ignored — see [Differences](#how-it-differs-from-native-fetch).
 
 ### WHATWG fields
 
-| Field     | Type                                                    | Default | Notes                                                                               |
-| --------- | ------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------- |
-| `method`  | `string`                                                | `"GET"` | Standard names are upper-cased (`post` → `POST`); custom methods pass through as-is |
-| `headers` | `Headers \| [string,string][] \| Record<string,string>` | none    | See [Request headers](#request-headers)                                             |
-| `body`    | see [Request bodies](#request-bodies)                   | none    |                                                                                     |
+| Field      | Type                                                    | Default    | Notes                                                                               |
+| ---------- | ------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------- |
+| `method`   | `string`                                                | `"GET"`    | Standard names are upper-cased (`post` → `POST`); custom methods pass through as-is |
+| `headers`  | `Headers \| [string,string][] \| Record<string,string>` | none       | See [Request headers](#request-headers)                                             |
+| `body`     | see [Request bodies](#request-bodies)                   | none       |                                                                                     |
+| `redirect` | `"follow" \| "manual" \| "error"`                       | `"follow"` | `"manual"` returns the 3xx; `"error"` rejects                                       |
 
 ### Fingerprint / transport extensions
 
@@ -80,7 +83,8 @@ Full semantics and worked examples live in the [README use cases](../README.md#u
 | `impersonate`                     | `string` | Browser fingerprint to emulate (`"chrome_147"` default, curl-impersonate presets, `"random"`) |
 | `platform`                        | `string` | Declared OS for UA/client-hint headers; does **not** diverge the TLS fingerprint              |
 | `proxy`                           | `string` | Per-request proxy (`http`/`https`/`socks5`, optional userinfo)                                |
-| `session`                         | `string` | Opaque id; calls sharing it reuse one client + cookie jar                                     |
+| `resolve`                         | `object` | Pin initial `host`/`host:port` to literal IPs; ignored with a proxy                           |
+| `session`                         | `string` | Opaque id; calls sharing it share one cookie jar (and reuse cached clients)                   |
 | `timeoutMs`                       | `number` | Overall request timeout                                                                       |
 | `maxResponseBytes`                | `number` | Response buffer cap (default 32 MiB)                                                          |
 | `tlsMinVersion` / `tlsMaxVersion` | `string` | TLS version bounds (`"1.0"`–`"1.3"`)                                                          |
@@ -211,8 +215,9 @@ Deliberately different — be aware:
 - **`arrayBuffer()` is `ArrayBuffer`, not Node `Buffer`.** If you're migrating
   from an older build of this package that returned a `Buffer`, switch to
   `bytes()` (which gives a `Uint8Array`) or wrap: `Buffer.from(await res.bytes())`.
-- **Redirects are always followed** (`wreq`'s default policy); there's no
-  `redirect: 'manual' | 'error'` control.
+- **`redirect: 'manual'` returns the actual 3xx response.** Browser fetch may
+  expose an opaque redirect depending on context; this server-side client
+  keeps the status and `Location` readable for per-hop SSRF validation.
 - **`statusText`** is the canonical reason phrase, not the literal wire bytes.
 
 Not supported (yet) — see [roadmap](#not-supported-yet):

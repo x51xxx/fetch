@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-19
+
+### Added
+
+- `resolve` pins the initial request hostname to caller-selected literal IP
+  addresses without changing TLS SNI, certificate validation, or the `Host`
+  header. Pinned requests use one-off clients so ephemeral targets do not fill
+  the shared client cache; with `session` set, those one-off clients share the
+  session's cookie jar, so cookies survive per-hop pinned fetching.
+- WHATWG-aligned `redirect: "follow" | "manual" | "error"` handling, applied
+  per request (a `session` keeps one client and cookie jar across redirect
+  modes) and also read from a `Request` input's own `redirect`. The default
+  remains `"follow"`; `"manual"` enables callers to validate and pin every
+  redirect hop for SSRF-safe fetching.
+
+### Changed
+
+- A session's cookie jar is now keyed by the `session` id alone instead of the
+  full client cache key. The same `session` used with different
+  `impersonate`/TLS/HTTP settings (or with `resolve`) now shares one jar,
+  matching the browser-tab model; previously each distinct combination kept a
+  separate, initially empty jar. Distinct `session` ids remain fully isolated,
+  and `clearSession`/`clearClientCache` drop the shared jars as before.
+
+### Security
+
+- Cross-host redirect targets are intentionally never covered by an initial
+  request's DNS pin. SSRF-sensitive callers must select `"manual"`, validate
+  each `Location`, and issue the next request with a new pin. Pins are ignored
+  with a proxy, where origin DNS resolution happens outside the direct client
+  connection.
+
 ## [1.0.1] - 2026-07-14
 
 First published release. 1.0.0 was tagged but never reached npm — its release
@@ -77,5 +109,6 @@ run failed while assembling the platform packages (see the build fix below).
   against Node's built-in `fetch`, plus an HTML report and methodology
   writeup under `docs/`.
 
+[1.1.0]: https://github.com/x51xxx/fetch/releases/tag/v1.1.0
 [1.0.1]: https://github.com/x51xxx/fetch/releases/tag/v1.0.1
 [1.0.0]: https://github.com/x51xxx/fetch/releases/tag/v1.0.0

@@ -54,7 +54,18 @@ export interface FetchInit {
   platform?: string
   /** Per-request proxy URL (`http://`, `https://`, or `socks5://`, optional userinfo). */
   proxy?: string
-  /** Opaque session id; calls sharing it reuse one client and its cookie jar. */
+  /**
+   * Pin the initial request hostname to literal IPs without changing TLS SNI,
+   * certificate validation, or the Host header. Keys are `"host"` or
+   * `"host:port"`; a port-specific key wins. Redirects to another host are not
+   * pinned, so SSRF-sensitive callers must use `redirect: "manual"` and re-pin
+   * each validated hop. Ignored when `proxy` is set. With `session` set, the
+   * pinned request shares that session's cookie jar.
+   */
+  resolve?: Record<string, string | string[]>
+  /** WHATWG redirect handling. Defaults to `"follow"`. Also read from a `Request` input. */
+  redirect?: 'follow' | 'manual' | 'error'
+  /** Opaque session id; the cookie jar is keyed by it alone and shared by every call using it. */
   session?: string
   /** Overall request timeout in milliseconds. */
   timeoutMs?: number

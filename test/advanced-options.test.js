@@ -85,6 +85,29 @@ test('two different sessions get isolated cookie jars', async () => {
   )
 })
 
+test('one session shares its cookie jar across impersonate profiles', async () => {
+  await withServer(
+    (req, res) => {
+      if (req.url === '/set') {
+        res.writeHead(200, { 'set-cookie': 'sid=cross-profile; Path=/' })
+        res.end('set')
+        return
+      }
+      res.writeHead(200, { 'content-type': 'text/plain' })
+      res.end(`cookie=${req.headers.cookie || 'none'}`)
+    },
+    async (base) => {
+      // Distinct impersonate values mean distinct cached clients, but the
+      // jar is keyed by the session id alone — like one browser tab whose
+      // fingerprint settings changed mid-session.
+      const session = `cross-profile-jar-${process.pid}`
+      await fetch(`${base}/set`, { session, impersonate: 'chrome_147' })
+      const res = await fetch(`${base}/check`, { session, impersonate: 'firefox_142' })
+      assert.equal(await res.text(), 'cookie=sid=cross-profile')
+    }
+  )
+})
+
 test('clearSession drops a session cookie jar', async () => {
   await withServer(
     (req, res) => {

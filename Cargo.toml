@@ -24,6 +24,12 @@ futures-util = "0.3"
 [build-dependencies]
 napi-build = "2"
 
+[dev-dependencies]
+rcgen = "0.13.2"
+rustls = { version = "0.23.41", default-features = false, features = ["ring", "std"] }
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "time"] }
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "tls12"] }
+
 [profile.release]
 lto = true
 strip = "symbols"

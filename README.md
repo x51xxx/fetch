@@ -190,9 +190,10 @@ must match a specific old browser version.
 
 ### 3. Multi-request session with persistent cookies (login flow)
 
-Pass the same `session` id (and the same `impersonate`/TLS/HTTP options) on
-every call that should share a cookie jar and connection pool — exactly what
-a real browser tab does across page navigations.
+Pass the same `session` id on every call that should share a cookie jar —
+exactly what a real browser tab does across page navigations. Keep the same
+`impersonate`/TLS/HTTP options too if the calls should also share one client
+and its connection pool.
 
 ```js
 const { fetch } = require('@trishchuk/fetch')
@@ -207,11 +208,10 @@ const login = await fetch('https://example.com/login', {
 })
 if (!login.ok) throw new Error(`login failed: ${login.status}`)
 
-// Same session id (and same impersonate/tlsMinVersion/tlsMaxVersion/
-// httpVersion) -> reuses the client that now holds the Set-Cookie from
-// /login. If you vary any of those fields between calls, you get a
-// *different* cached client with an empty cookie jar and the cookie won't
-// carry over.
+// Same session id -> same cookie jar, so this call carries the Set-Cookie
+// from /login. The jar is keyed by the session id alone; varying
+// impersonate/TLS/HTTP options switches to a different cached client (new
+// connection pool and fingerprint) but keeps the same cookies.
 const profile = await fetch('https://example.com/account', { session })
 console.log(await profile.json())
 ```
@@ -284,6 +284,50 @@ the client cache key — see [How it works](#how-it-works) — so a call with
 `tlsOptions` set gets its own cached client, isolated from calls without it
 even if `impersonate`/`session` otherwise match.
 
+### 7. SSRF-safe DNS pinning and manual redirects
+
+`resolve` closes the DNS-rebinding gap between an application's validation
+lookup and the native socket connection. It changes only the connection IP;
+TLS SNI, certificate validation, and the `Host` header continue to use the
+URL's original hostname.
+
+```js
+const dns = require('node:dns').promises
+const { fetch } = require('@trishchuk/fetch')
+
+async function ssrfSafeFetch(input, maxRedirects = 10) {
+  let url = new URL(input)
+
+  for (let hop = 0; hop <= maxRedirects; hop += 1) {
+    const dnsHost = url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname
+    const { address } = await dns.lookup(dnsHost)
+    assertPublicAddress(address) // your app-specific private/reserved-IP policy
+
+    const response = await fetch(url, {
+      resolve: { [url.host]: address },
+      redirect: 'manual',
+    })
+
+    if (response.status < 300 || response.status > 399) return response
+    const location = response.headers.get('location')
+    if (location === null) return response
+    if (hop === maxRedirects) throw new Error('too many redirects')
+    url = new URL(location, url)
+  }
+}
+```
+
+The library intentionally does not decide whether an IP is safe. Validate
+every address returned by DNS, including every address you pass for failover.
+An initial request's `resolve` map is never installed for a redirect to another
+host (same-host redirects keep using the initial host's pin), so SSRF-sensitive
+code must use `redirect: "manual"` and repeat resolution, validation, and
+pinning for each `Location`. `resolve` is ignored when `proxy` is set because
+the proxy, not this client's direct connector, resolves the origin hostname.
+If the flow needs cookies (a login that redirects, say), add a `session`: the
+per-hop pinned clients all share that session's cookie jar, so cookies survive
+the hops while every connection stays pinned.
+
 ## API reference
 
 The public API is the ergonomic wrapper in `index.js` (typed by the
@@ -312,7 +356,9 @@ package's fingerprint/transport options. When both `input` (a `Request`) and
 | `impersonate`      | `string`                                                                            | `"chrome_147"`        | Fingerprint to emulate: a native `wreq-util` profile name (`"chrome_147"`, `"safari_26"`, `"firefox_142"`), a curl-impersonate preset name (`"chrome116"`, `"ff109"`, `"safari15_5"` — see `listImpersonatePresets()`), or `"random"` / `"weighted_random"`. |
 | `platform`         | `string`                                                                            | profile default       | Declared OS for User-Agent/client-hint headers: `"windows"`, `"macos"`, `"linux"`, `"android"`, or `"ios"`. Client-level; has no effect for random profiles.                                                                                                 |
 | `proxy`            | `string`                                                                            | none                  | Proxy URL for this request (`http://`, `https://`, or `socks5://`, with optional userinfo). Applied per request; does not affect client-cache reuse.                                                                                                         |
-| `session`          | `string`                                                                            | none (stateless)      | Opaque session id. Calls with the same (`session`, `impersonate`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one client and its cookie jar. Omitted = no cookie jar, never shared with anyone.                                                   |
+| `resolve`          | `Record<string, string \| string[]>`                                                | none                  | Pin the initial URL's `"host"` or `"host:port"` to literal IPs while preserving hostname-based TLS and `Host`. Port-specific entries win. Cross-host redirects are not pinned; ignored with `proxy`.                                                         |
+| `redirect`         | `"follow" \| "manual" \| "error"`                                                   | `"follow"`            | WHATWG redirect policy. `"manual"` returns the 3xx response and readable `Location`; `"error"` rejects on a redirect. Per-request; also read from a `Request` input's own `redirect`.                                                                        |
+| `session`          | `string`                                                                            | none (stateless)      | Opaque session id. Calls with the same (`session`, `impersonate`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one client; the cookie jar is keyed by `session` alone and shared across those settings and `resolve` one-offs. Omitted = no jar.   |
 | `timeoutMs`        | `number`                                                                            | none (no timeout)     | Overall request timeout in milliseconds.                                                                                                                                                                                                                     |
 | `maxResponseBytes` | `number`                                                                            | `33,554,432` (32 MiB) | Hard limit for the fully buffered response body. The request rejects if the decoded body exceeds it.                                                                                                                                                         |
 | `tlsMinVersion`    | `string`                                                                            | profile default       | Minimum TLS version to offer: `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"`. Client-level (part of the cache key).                                                                                                                                                      |
@@ -323,8 +369,12 @@ package's fingerprint/transport options. When both `input` (a `Request`) and
 `impersonate`, `platform`, `session`, `tlsMinVersion`, `tlsMaxVersion`,
 `httpVersion`, and `tlsOptions` are all **client-level**: they determine which cached
 `wreq::Client` (and connection pool / cookie jar) a call uses. `method`,
-`headers`, `body`, `proxy`, and `timeoutMs` are **per-request** and don't
-affect caching.
+`headers`, `body`, `proxy`, `redirect`, and `timeoutMs` are **per-request** and
+don't affect caching — in particular, a session that logs in with
+`redirect: "manual"` and then browses with the default `"follow"` keeps one
+client and one cookie jar. A request carrying `resolve` uses a one-off client, even if its
+map has no matching entry, so ephemeral IP pins never populate the shared LRU;
+with `session` set the one-off client still shares the session's cookie jar.
 
 ### `FetchResponse`
 
@@ -487,8 +537,8 @@ browser/version/platform; `impersonate` selects one of those, or a
 curl-impersonate preset name that's mapped onto the closest `wreq-util`
 profile (see `CURL_IMPERSONATE_PRESETS` in `src/lib.rs`).
 
-Every distinct combination of (`impersonate`, `session`, `tlsMinVersion`,
-`tlsMaxVersion`, `httpVersion`, `tlsOptions`) gets its own cached
+Every distinct combination of (`impersonate`, `session`,
+`tlsMinVersion`, `tlsMaxVersion`, `httpVersion`, `tlsOptions`) gets its own cached
 `wreq::Client`, keyed by a `ClientKey` (see `get_or_build_client` in
 `src/lib.rs`). This isn't an optimization detail you can ignore — it's
 load-bearing for correctness:
@@ -499,16 +549,21 @@ load-bearing for correctness:
   every request sent through it. There's no way to vary the fingerprint
   per-request on a shared client, so distinct fingerprints require distinct
   clients.
-- **Cookies are a property of the client, not of a request either.** A
-  cookie jar is attached only when `session` is set (`cookie_store(key.session.is_some())`).
-  Two calls only share cookies if they resolve to the _same_ cache key —
-  which is why `session` alone isn't enough; `impersonate`/TLS/HTTP-version
-  have to match too, otherwise you'd silently get a different client with an
-  empty jar.
+- **Cookies belong to the session, not to any single client.** A cookie jar
+  is attached only when `session` is set, and it's keyed by the session id
+  alone (`session_jar` in `src/lib.rs`): every client built for that session —
+  cached clients for different `impersonate`/TLS settings and one-off
+  `resolve` clients alike — shares the same jar, the way one browser tab
+  keeps its cookies when its fingerprint settings change.
 - `random`/`weighted_random` pick one profile the first time they're
   requested for a given cache key and then keep reusing that same client —
   matching how a real browser session sticks to one fingerprint rather than
   re-randomizing every request.
+- Requests with a `resolve` map bypass this cache and build a one-off client.
+  That prevents per-request pins from filling the LRU and ensures a connection
+  pinned for one target can never be reused by an unpinned request. With
+  `session` set, the one-off client still shares that session's cookie jar,
+  so pinned and unpinned calls in one session see the same cookies.
 
 `tlsOptions` overrides are applied by mutating the resolved `Emulation`'s own
 `tls_options` struct field-by-field _before_ it's handed to the client

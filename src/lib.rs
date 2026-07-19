@@ -1,12 +1,14 @@
 #![deny(clippy::all)]
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::net::{IpAddr, SocketAddr};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+use wreq::cookie::Jar;
 use wreq::tls::TlsVersion;
 use wreq::{Client, IntoEmulation, Method, Proxy, Uri};
 use wreq_util::{Emulation as EmulationProfile, Platform, Profile};
@@ -29,10 +31,12 @@ struct TlsOptionsKey {
     session_ticket: Option<bool>,
 }
 
-/// Identifies a distinct underlying `wreq::Client` (and, for session-scoped
-/// clients, its persistent cookie jar). Two calls with equal keys share a
-/// client and its connection pool; unequal keys get isolated clients so that
-/// e.g. two different `session` ids never see each other's cookies.
+/// Identifies a distinct underlying `wreq::Client`. Two calls with equal keys
+/// share a client and its connection pool; unequal keys get isolated clients.
+/// The persistent cookie jar is deliberately NOT per-key: it's keyed by the
+/// `session` id alone (see `session_jar`), so cookies follow a session across
+/// fingerprint settings and `resolve` one-off clients, while two different
+/// `session` ids still never see each other's cookies.
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct ClientKey {
     impersonate: String,
@@ -42,6 +46,17 @@ struct ClientKey {
     tls_max_version: Option<String>,
     http_version: Option<String>,
     tls_options: Option<TlsOptionsKey>,
+}
+
+struct ResolveOverride {
+    host: String,
+    addrs: Vec<SocketAddr>,
+}
+
+struct SelectedResolve<'a> {
+    port_specific: bool,
+    key: &'a str,
+    value: &'a Either<String, Vec<String>>,
 }
 
 struct CachedClient {
@@ -57,6 +72,20 @@ static CLIENTS: OnceLock<ClientCache> = OnceLock::new();
 /// or TLS overrides. Evicted clients are dropped; in-flight requests keep the
 /// clone they already received.
 const MAX_CACHED_CLIENTS: usize = 256;
+
+struct SessionJar {
+    jar: Arc<Jar>,
+    last_used: Instant,
+}
+
+type SessionJarMap = Mutex<HashMap<String, SessionJar>>;
+
+static SESSION_JARS: OnceLock<SessionJarMap> = OnceLock::new();
+
+/// Same scale as the client cache: live jars are the ones cached clients (or
+/// in-flight requests) still reference, and those are bounded by
+/// `MAX_CACHED_CLIENTS`.
+const MAX_SESSION_JARS: usize = MAX_CACHED_CLIENTS;
 
 /// A buffered API still needs a hard ceiling to avoid an untrusted response
 /// exhausting the Node process. Callers can lower or raise this per request.
@@ -252,6 +281,58 @@ fn lock_client_cache() -> Result<MutexGuard<'static, HashMap<ClientKey, CachedCl
     })
 }
 
+fn lock_session_jars() -> Result<MutexGuard<'static, HashMap<String, SessionJar>>> {
+    SESSION_JARS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| {
+            Error::new(
+                Status::GenericFailure,
+                "session jar map is unavailable because a previous operation panicked",
+            )
+        })
+}
+
+/// One cookie jar per session id, shared by every client built for that
+/// session — the cached per-`ClientKey` clients and the one-off clients built
+/// for `resolve` requests — so cookies follow the session the way they follow
+/// a browser tab. Lock order: this may be called while the client cache lock
+/// is held (client cache → session jars); nothing locks in the other
+/// direction.
+fn session_jar(session: &str) -> Result<Arc<Jar>> {
+    let mut jars = lock_session_jars()?;
+    if let Some(entry) = jars.get_mut(session) {
+        entry.last_used = Instant::now();
+        return Ok(entry.jar.clone());
+    }
+
+    if jars.len() >= MAX_SESSION_JARS {
+        // Only evict jars no live client references (strong count 1 means the
+        // map holds the last Arc): dropping a referenced jar would silently
+        // fork that session's cookies between old and new clients. If every
+        // jar is referenced the map grows past the soft bound instead; live
+        // references are themselves bounded by the client cache.
+        if let Some(oldest_key) = jars
+            .iter()
+            .filter(|(_, entry)| Arc::strong_count(&entry.jar) == 1)
+            .min_by_key(|(_, entry)| entry.last_used)
+            .map(|(key, _)| key.clone())
+        {
+            jars.remove(&oldest_key);
+        }
+    }
+
+    let jar = Arc::new(Jar::default());
+    jars.insert(
+        session.to_string(),
+        SessionJar {
+            jar: jar.clone(),
+            last_used: Instant::now(),
+        },
+    );
+    Ok(jar)
+}
+
 fn parse_platform(name: &str) -> Result<Platform> {
     match name {
         "windows" => Ok(Platform::Windows),
@@ -331,34 +412,186 @@ fn parse_tls_version(version: &str) -> Result<TlsVersion> {
     }
 }
 
-/// Client caching is keyed by `ClientKey`: fingerprinting and cookies are
-/// per-connection/per-client properties, not per-request ones. `random` /
-/// `weighted_random` pick one profile per process the first time they're
-/// requested, then keep reusing that client (and its connection pool) like a
-/// real browser session would. A cookie jar is only attached when `session`
-/// is set, so anonymous calls (no session) never accidentally share cookies
-/// with unrelated callers that happen to use the same profile.
-fn get_or_build_client(key: ClientKey) -> Result<Client> {
-    // Keep the lock through construction. Client construction performs no
-    // network I/O, and this makes the first two concurrent calls to the same
-    // session share one cookie jar instead of racing to create two of them.
-    let mut cache = lock_client_cache()?;
-    if let Some(entry) = cache.get_mut(&key) {
-        entry.last_used = Instant::now();
-        return Ok(entry.client.clone());
+/// Maps the WHATWG redirect mode onto a per-request `wreq` redirect policy.
+/// `None` means "no override": the request keeps the client's default
+/// follow policy, so plain calls don't pay for a request-config entry.
+fn parse_redirect_policy(redirect: Option<&str>) -> Result<Option<wreq::redirect::Policy>> {
+    match redirect {
+        None | Some("follow") => Ok(None),
+        Some("manual") => Ok(Some(wreq::redirect::Policy::none())),
+        Some("error") => Ok(Some(wreq::redirect::Policy::custom(|attempt| {
+            attempt.error("redirect encountered while redirect mode is 'error'")
+        }))),
+        Some(other) => Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "unsupported redirect '{other}', expected one of \"follow\", \"manual\", \"error\""
+            ),
+        )),
+    }
+}
+
+fn parse_resolve_key(key: &str) -> Result<(&str, Option<u16>)> {
+    if key.is_empty() {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "resolve keys must not be empty",
+        ));
     }
 
+    if let Some(bracketed) = key.strip_prefix('[') {
+        let close = bracketed.find(']').ok_or_else(|| {
+            Error::new(
+                Status::InvalidArg,
+                format!("invalid resolve key '{key}': missing closing ']'"),
+            )
+        })?;
+        let host = &bracketed[..close];
+        host.parse::<IpAddr>().map_err(|e| {
+            Error::new(
+                Status::InvalidArg,
+                format!("invalid IPv6 host in resolve key '{key}': {e}"),
+            )
+        })?;
+        let remainder = &bracketed[close + 1..];
+        let port = if remainder.is_empty() {
+            None
+        } else {
+            let raw_port = remainder.strip_prefix(':').ok_or_else(|| {
+                Error::new(
+                    Status::InvalidArg,
+                    format!("invalid resolve key '{key}', expected '[host]' or '[host]:port'"),
+                )
+            })?;
+            Some(parse_resolve_port(key, raw_port)?)
+        };
+        return Ok((host, port));
+    }
+
+    // An unbracketed IPv6 literal is a host-only key. Brackets are required
+    // only when a port is appended, matching URL authority syntax.
+    if key.parse::<IpAddr>().is_ok() {
+        return Ok((key, None));
+    }
+
+    if let Some((host, raw_port)) = key.rsplit_once(':') {
+        if host.is_empty() {
+            return Err(Error::new(
+                Status::InvalidArg,
+                format!("invalid resolve key '{key}': host must not be empty"),
+            ));
+        }
+        return Ok((host, Some(parse_resolve_port(key, raw_port)?)));
+    }
+
+    Ok((key, None))
+}
+
+fn parse_resolve_port(key: &str, port: &str) -> Result<u16> {
+    port.parse::<u16>()
+        .ok()
+        .filter(|port| *port != 0)
+        .ok_or_else(|| {
+            Error::new(
+                Status::InvalidArg,
+                format!("invalid port in resolve key '{key}', expected 1..65535"),
+            )
+        })
+}
+
+fn select_resolve_override(
+    url: &str,
+    resolve: &HashMap<String, Either<String, Vec<String>>>,
+) -> Result<Option<ResolveOverride>> {
+    let uri: Uri = url.parse().map_err(|e| {
+        Error::new(
+            Status::InvalidArg,
+            format!("invalid URL for resolve matching: {e}"),
+        )
+    })?;
+    let raw_request_host = uri
+        .host()
+        .ok_or_else(|| Error::new(Status::InvalidArg, "resolve requires a URL with a hostname"))?;
+    let request_host = raw_request_host
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(raw_request_host);
+    let request_port = uri.port_u16().or_else(|| match uri.scheme_str() {
+        Some("http") => Some(80),
+        Some("https") => Some(443),
+        _ => None,
+    });
+
+    let mut selected: Option<SelectedResolve<'_>> = None;
+    for (key, value) in resolve {
+        let (host, port) = parse_resolve_key(key)?;
+        if !host.eq_ignore_ascii_case(request_host) || port.is_some() && port != request_port {
+            continue;
+        }
+
+        let is_port_specific = port.is_some();
+        if selected
+            .as_ref()
+            .is_none_or(|current| is_port_specific && !current.port_specific)
+        {
+            selected = Some(SelectedResolve {
+                port_specific: is_port_specific,
+                key,
+                value,
+            });
+        }
+    }
+
+    let Some(selected) = selected else {
+        return Ok(None);
+    };
+    let raw_addrs = match selected.value {
+        Either::A(ip) => std::slice::from_ref(ip),
+        Either::B(ips) => ips.as_slice(),
+    };
+    if raw_addrs.is_empty() {
+        return Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "resolve entry '{}' must contain at least one IP address",
+                selected.key
+            ),
+        ));
+    }
+
+    let socket_port = request_port.unwrap_or(0);
+    let addrs = raw_addrs
+        .iter()
+        .map(|raw_ip| {
+            raw_ip
+                .parse::<IpAddr>()
+                .map(|ip| SocketAddr::new(ip, socket_port))
+                .map_err(|e| {
+                    Error::new(
+                        Status::InvalidArg,
+                        format!(
+                            "invalid IP address '{raw_ip}' in resolve entry '{}': {e}",
+                            selected.key
+                        ),
+                    )
+                })
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(Some(ResolveOverride {
+        host: request_host.to_string(),
+        addrs,
+    }))
+}
+
+fn build_client(key: &ClientKey, resolve: Option<&ResolveOverride>) -> Result<Client> {
     let platform = key.platform.as_deref().map(parse_platform).transpose()?;
     let mut emulation = resolve_emulation(&key.impersonate, platform)?;
 
     // Mutate the preset's own `tls_options` in place rather than calling
-    // `ClientBuilder::tls_options()` afterwards: that setter does a wholesale
-    // `self.config.tls_options = options.into()` replace (same code path
-    // `.emulation()` itself uses to install the preset's TLS config), so a
-    // partial override built there would wipe out every other TLS knob the
-    // preset set. Overriding specific fields on the preset's own struct
-    // before `.emulation()` sees it means unset fields keep the preset's
-    // values, and only the requested field actually diverges the fingerprint.
+    // `ClientBuilder::tls_options()` afterwards: that setter replaces the
+    // complete preset TLS config, whereas these are deliberately partial
+    // overrides.
     if let Some(overrides) = &key.tls_options {
         let mut tls_options = emulation.tls_options.take().unwrap_or_default();
         if let Some(v) = &overrides.cipher_list {
@@ -381,9 +614,15 @@ fn get_or_build_client(key: ClientKey) -> Result<Client> {
 
     let mut builder = Client::builder()
         .emulation(emulation)
-        .redirect(wreq::redirect::Policy::default())
-        .cookie_store(key.session.is_some());
+        .redirect(wreq::redirect::Policy::default());
 
+    if let Some(session) = &key.session {
+        builder = builder.cookie_provider(session_jar(session)?);
+    }
+
+    if let Some(resolve) = resolve {
+        builder = builder.resolve_to_addrs(resolve.host.clone(), resolve.addrs.clone());
+    }
     if let Some(version) = &key.tls_min_version {
         builder = builder.tls_min_version(parse_tls_version(version)?);
     }
@@ -402,12 +641,33 @@ fn get_or_build_client(key: ClientKey) -> Result<Client> {
         None => {}
     }
 
-    let client = builder.build().map_err(|e| {
+    builder.build().map_err(|e| {
         Error::new(
             Status::GenericFailure,
             format!("failed to build client: {e}"),
         )
-    })?;
+    })
+}
+
+/// Client caching is keyed by `ClientKey`: fingerprinting is a
+/// per-connection/per-client property, not a per-request one. `random` /
+/// `weighted_random` pick one profile per process the first time they're
+/// requested, then keep reusing that client (and its connection pool) like a
+/// real browser session would. A cookie jar (shared per session id — see
+/// `session_jar`) is only attached when `session` is set, so anonymous calls
+/// never accidentally share cookies with unrelated callers that happen to use
+/// the same profile.
+fn get_or_build_client(key: ClientKey) -> Result<Client> {
+    // Keep the lock through construction. Client construction performs no
+    // network I/O, and this stops two concurrent first calls with the same
+    // key from racing to build two clients.
+    let mut cache = lock_client_cache()?;
+    if let Some(entry) = cache.get_mut(&key) {
+        entry.last_used = Instant::now();
+        return Ok(entry.client.clone());
+    }
+
+    let client = build_client(&key, None)?;
 
     if cache.len() >= MAX_CACHED_CLIENTS {
         if let Some(oldest_key) = cache
@@ -459,12 +719,32 @@ pub struct FetchOptions {
     /// "socks5://host:1080". Applied per request; does not affect which
     /// client/connection-pool this call reuses.
     pub proxy: Option<String>,
+    /// Pin the request hostname to one or more literal IP addresses while
+    /// keeping the original hostname for TLS SNI, certificate validation, and
+    /// the Host header. Keys are "host" or "host:port"; bracket IPv6 keys
+    /// when adding a port. Only the URL's initial host is considered, and a
+    /// port-specific entry takes precedence over a host-only entry. Redirects
+    /// to another host are not pinned, even if that host is also in this map:
+    /// SSRF-sensitive callers must use `redirect: "manual"`, validate each
+    /// Location, and provide a new pin per hop. Ignored when `proxy` is set
+    /// because the proxy performs resolution.
+    /// Requests carrying this option use a one-off client rather than the
+    /// process-wide client cache; with `session` set, the one-off client
+    /// still shares that session's cookie jar.
+    pub resolve: Option<HashMap<String, Either<String, Vec<String>>>>,
+    /// WHATWG redirect handling: "follow" (the default), "manual" (return the
+    /// 3xx response), or "error" (reject on a redirect). Per-request: calls on
+    /// the same `session` share one client and cookie jar regardless of their
+    /// redirect mode.
+    pub redirect: Option<String>,
     /// Opaque session id. Calls sharing the same (`impersonate`, `platform`,
-    /// `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one underlying
-    /// client with a persistent cookie jar, so cookies carry across calls the
-    /// way they would in a real browser tab. Omit for stateless, cookie-less
-    /// calls (the default) — this avoids unrelated callers on the same
-    /// profile ever sharing cookies by accident.
+    /// `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one
+    /// underlying client, and the persistent cookie jar is keyed by the
+    /// session id alone — cookies carry across calls, fingerprint settings,
+    /// and `resolve` one-off clients the way they would in a real browser
+    /// tab. Omit for stateless, cookie-less calls (the default) — this avoids
+    /// unrelated callers on the same profile ever sharing cookies by
+    /// accident.
     pub session: Option<String>,
     /// Overall request timeout in milliseconds.
     pub timeout_ms: Option<u32>,
@@ -533,23 +813,32 @@ pub fn list_impersonate_presets() -> Vec<ImpersonatePresetInfo> {
         .collect()
 }
 
-/// Removes every cached client (and its in-memory cookie jar) for a session.
-/// Existing in-flight requests continue with their already-cloned client.
+/// Removes every cached client for a session, along with the session's shared
+/// in-memory cookie jar. Existing in-flight requests continue with their
+/// already-cloned client (and its reference to the old jar).
 #[napi]
 pub fn clear_session(session: String) -> Result<u32> {
-    let mut cache = lock_client_cache()?;
-    let count_before = cache.len();
-    cache.retain(|key, _| key.session.as_deref() != Some(session.as_str()));
-    Ok((count_before - cache.len()) as u32)
+    let removed = {
+        let mut cache = lock_client_cache()?;
+        let count_before = cache.len();
+        cache.retain(|key, _| key.session.as_deref() != Some(session.as_str()));
+        (count_before - cache.len()) as u32
+    };
+    lock_session_jars()?.remove(&session);
+    Ok(removed)
 }
 
 /// Clears all cached clients. Intended for controlled shutdown or test/setup
 /// boundaries; it also drops all in-memory session cookies.
 #[napi]
 pub fn clear_client_cache() -> Result<u32> {
-    let mut cache = lock_client_cache()?;
-    let count = cache.len() as u32;
-    cache.clear();
+    let count = {
+        let mut cache = lock_client_cache()?;
+        let count = cache.len() as u32;
+        cache.clear();
+        count
+    };
+    lock_session_jars()?.clear();
     Ok(count)
 }
 
@@ -646,6 +935,8 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
         impersonate: None,
         platform: None,
         proxy: None,
+        resolve: None,
+        redirect: None,
         session: None,
         timeout_ms: None,
         max_response_bytes: None,
@@ -655,7 +946,8 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
         tls_options: None,
     });
 
-    let client = get_or_build_client(ClientKey {
+    let redirect_policy = parse_redirect_policy(options.redirect.as_deref())?;
+    let client_key = ClientKey {
         impersonate: options
             .impersonate
             .clone()
@@ -672,7 +964,22 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
             permute_extensions: o.permute_extensions,
             session_ticket: o.session_ticket,
         }),
-    })?;
+    };
+
+    // DNS pins are target-specific and normally ephemeral, so never put their
+    // clients (and connections bound to those IPs) in the shared LRU. When a
+    // proxy is configured the proxy resolves the origin hostname; in that case
+    // resolve is deliberately ignored and the ordinary cached client is safe.
+    let client = if options.proxy.is_none() {
+        if let Some(resolve) = options.resolve.as_ref() {
+            let selected = select_resolve_override(&url, resolve)?;
+            build_client(&client_key, selected.as_ref())?
+        } else {
+            get_or_build_client(client_key)?
+        }
+    } else {
+        get_or_build_client(client_key)?
+    };
 
     let method = match options.method {
         Some(m) => Method::from_bytes(m.as_bytes())
@@ -682,6 +989,10 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
 
     let requested_url = url.clone();
     let mut builder = client.request(method, url);
+
+    if let Some(policy) = redirect_policy {
+        builder = builder.redirect(policy);
+    }
 
     if let Some(headers) = options.headers {
         // N-API maps a JS object into HashMap, whose iteration order is

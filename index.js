@@ -25,6 +25,8 @@ const PASSTHROUGH_KEYS = [
   'impersonate',
   'platform',
   'proxy',
+  'resolve',
+  'redirect',
   'session',
   'timeoutMs',
   'maxResponseBytes',
@@ -190,6 +192,10 @@ async function fetch(input, init) {
   const options = {}
   for (const key of PASSTHROUGH_KEYS) {
     if (init[key] !== undefined) options[key] = init[key]
+  }
+  // WHATWG: a `Request` carries its own `redirect` mode; init takes precedence.
+  if (options.redirect === undefined && requestObj && typeof requestObj.redirect === 'string') {
+    options.redirect = requestObj.redirect
   }
   if (method !== undefined) options.method = method
   if (finalHeaders !== undefined) options.headers = finalHeaders

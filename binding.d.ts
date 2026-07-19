@@ -25,8 +25,9 @@ export declare class FetchResponse {
 export declare function clearClientCache(): number
 
 /**
- * Removes every cached client (and its in-memory cookie jar) for a session.
- * Existing in-flight requests continue with their already-cloned client.
+ * Removes every cached client for a session, along with the session's shared
+ * in-memory cookie jar. Existing in-flight requests continue with their
+ * already-cloned client (and its reference to the old jar).
  */
 export declare function clearSession(session: string): number
 
@@ -71,12 +72,36 @@ export interface FetchOptions {
    */
   proxy?: string
   /**
+   * Pin the request hostname to one or more literal IP addresses while
+   * keeping the original hostname for TLS SNI, certificate validation, and
+   * the Host header. Keys are "host" or "host:port"; bracket IPv6 keys
+   * when adding a port. Only the URL's initial host is considered, and a
+   * port-specific entry takes precedence over a host-only entry. Redirects
+   * to another host are not pinned, even if that host is also in this map:
+   * SSRF-sensitive callers must use `redirect: "manual"`, validate each
+   * Location, and provide a new pin per hop. Ignored when `proxy` is set
+   * because the proxy performs resolution.
+   * Requests carrying this option use a one-off client rather than the
+   * process-wide client cache; with `session` set, the one-off client
+   * still shares that session's cookie jar.
+   */
+  resolve?: Record<string, string | Array<string>>
+  /**
+   * WHATWG redirect handling: "follow" (the default), "manual" (return the
+   * 3xx response), or "error" (reject on a redirect). Per-request: calls on
+   * the same `session` share one client and cookie jar regardless of their
+   * redirect mode.
+   */
+  redirect?: string
+  /**
    * Opaque session id. Calls sharing the same (`impersonate`, `platform`,
-   * `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one underlying
-   * client with a persistent cookie jar, so cookies carry across calls the
-   * way they would in a real browser tab. Omit for stateless, cookie-less
-   * calls (the default) — this avoids unrelated callers on the same
-   * profile ever sharing cookies by accident.
+   * `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one
+   * underlying client, and the persistent cookie jar is keyed by the
+   * session id alone — cookies carry across calls, fingerprint settings,
+   * and `resolve` one-off clients the way they would in a real browser
+   * tab. Omit for stateless, cookie-less calls (the default) — this avoids
+   * unrelated callers on the same profile ever sharing cookies by
+   * accident.
    */
   session?: string
   /** Overall request timeout in milliseconds. */

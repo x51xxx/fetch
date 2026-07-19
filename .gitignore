@@ -5,3 +5,4 @@ node_modules
 .idea
 bench/results
 bench/report-data.json
+.env
