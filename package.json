@@ -49,7 +49,7 @@
     "build:debug": "napi build --platform --js binding.js --dts binding.d.ts",
     "test": "node --test test/*.test.js",
     "artifacts": "napi artifacts",
-    "prepublishOnly": "napi pre-publish -t npm",
+    "prepublishOnly": "napi pre-publish -t npm --skip-optional-publish",
     "format": "prettier --write . && cargo fmt",
     "format:check": "prettier --check . && cargo fmt -- --check",
     "lint": "eslint . && cargo clippy --all-targets --all-features -- -D warnings"

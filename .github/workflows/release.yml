@@ -94,7 +94,16 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # --ignore-scripts: package.json's `prepublishOnly` runs `napi pre-publish
+      # -t npm` WITHOUT --skip-optional-publish, so a plain `npm publish` here
+      # re-runs the whole pre-publish a second time -- republishing all seven
+      # platform packages the step above just pushed (seven "cannot publish over
+      # the previously published versions" errors) and retrying the GitHub
+      # release without a token (a 401 stack trace). npm currently treats both
+      # as non-fatal and still publishes the root package, so the release only
+      # *looks* clean; this stops it resting on that tolerance. The explicit
+      # pre-publish step above, with the right flags, already did that work.
       - name: Publish main package
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
