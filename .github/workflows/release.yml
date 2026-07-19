@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # napi pre-publish --gh-release creates a GitHub Release
-      id-token: write # OIDC token for npm trusted publishing (and provenance)
+      id-token: write # npm publish --provenance needs an OIDC token
     steps:
       - uses: actions/checkout@v4
 
@@ -32,14 +32,6 @@ jobs:
           node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
-
-      # Trusted publishing needs npm >= 11.5.1. `node-version: 24` resolves to
-      # whatever 24.x is current, whose bundled npm may be older -- and an older
-      # npm silently ignores OIDC and falls back to token auth (which we no
-      # longer provide), so pin a new-enough npm explicitly rather than hope the
-      # runner ships one.
-      - name: Ensure npm supports trusted publishing
-        run: npm install -g npm@latest
 
       - run: pnpm install --frozen-lockfile
 
@@ -87,22 +79,22 @@ jobs:
       # public`, so the first publish of these scoped packages would fail
       # outright -- and the explicit "Publish platform packages" step below
       # would then try to publish the same versions a second time. We let that
-      # step own all publishing. The GitHub release and .node asset uploads
-      # still happen here (they're outside the skipped publish path).
+      # step own all publishing so every package goes out with --access public
+      # --provenance. The GitHub release and .node asset uploads still happen
+      # here (they're outside the skipped publish path).
       - run: pnpm exec napi pre-publish --tagstyle npm --gh-release --skip-optional-publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Auth is via OIDC trusted publishing (the id-token permission above), so
-      # there is no NODE_AUTH_TOKEN. Each of these 8 packages must have a
-      # matching trusted publisher configured on npmjs.com (repo x51xxx/fetch,
-      # workflow release.yml) or the publish is rejected. --provenance is
-      # omitted because trusted publishing generates provenance automatically.
       - name: Publish platform packages
         run: |
           for dir in npm/*/; do
-            npm publish "$dir" --access public
+            npm publish "$dir" --access public --provenance
           done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish main package
-        run: npm publish --access public
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
