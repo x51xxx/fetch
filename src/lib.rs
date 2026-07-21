@@ -642,10 +642,21 @@ fn build_client(key: &ClientKey, resolve: Option<&ResolveOverride>) -> Result<Cl
     }
 
     builder.build().map_err(|e| {
-        Error::new(
-            Status::GenericFailure,
-            format!("failed to build client: {e}"),
-        )
+        // A caller-supplied TLS override (`cipherList`/`curvesList`/
+        // `sigalgsList`) that BoringSSL rejects surfaces here as a `Kind::Tls`
+        // build error — that is bad input, not an internal failure, so report it
+        // as `InvalidArg` (matching the other option-validation errors) and name
+        // the culprit. Only do this when the caller actually passed overrides; a
+        // `Kind::Tls` error without them would be an internal/system fault and
+        // stays `GenericFailure`.
+        if key.tls_options.is_some() && e.is_tls() {
+            Error::new(Status::InvalidArg, format!("invalid tlsOptions: {e}"))
+        } else {
+            Error::new(
+                Status::GenericFailure,
+                format!("failed to build client: {e}"),
+            )
+        }
     })
 }
 
@@ -926,6 +937,49 @@ impl FetchResponse {
     }
 }
 
+/// Classifies a transport-layer `wreq` failure into a stable, machine-readable
+/// code. napi's `Error<Status>` can only carry one of napi's own fixed status
+/// strings as the JS `error.code`, so the category is emitted as a `[CODE] `
+/// prefix on the error message; the JS wrapper strips it and re-exposes it as
+/// `FetchError.code`. Callers rotating proxies rely on this to tell a dead
+/// proxy (`PROXY_CONNECT`) from a blocked or unreachable origin — a distinction
+/// that is otherwise lost once every failure collapses to "request failed".
+///
+/// Order matters: the variants are checked most-specific first. `PROXY_CONNECT`
+/// leads because localizing the fault to the proxy is the highest-value signal —
+/// a proxy-connect failure that also carries a timeout is still reported as
+/// `PROXY_CONNECT`, not `TIMEOUT`. `Connect` and `ProxyConnect` are disjoint
+/// wreq `ErrorKind`s, so their order is only about intent, not correctness.
+///
+/// There is deliberately no `TLS` category. wreq's `is_tls()` matches only a
+/// top-level `Kind::Tls`, which it produces for TLS *configuration* errors (a
+/// bad `cipherList`/`curvesList`, cert parsing) — and those surface earlier, at
+/// client-build time, never reaching this function. A request-time TLS handshake
+/// or certificate failure is wrapped by the connector as `ErrorKind::Connect`,
+/// so it is (correctly) reported as `CONNECT`; separating it would require
+/// downcasting wreq's private BoringSSL backend, a coupling not worth the signal.
+fn classify_request_error(e: &wreq::Error) -> &'static str {
+    if e.is_proxy_connect() {
+        "PROXY_CONNECT"
+    } else if e.is_timeout() {
+        "TIMEOUT"
+    } else if e.is_connect() {
+        "CONNECT"
+    } else if e.is_connection_reset() {
+        "CONNECTION_RESET"
+    } else if e.is_redirect() {
+        "REDIRECT"
+    } else if e.is_decode() {
+        "DECODE"
+    } else if e.is_body() {
+        "BODY"
+    } else if e.is_request() {
+        "REQUEST"
+    } else {
+        "REQUEST_FAILED"
+    }
+}
+
 #[napi]
 pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchResponse> {
     let options = options.unwrap_or(FetchOptions {
@@ -1038,10 +1092,12 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
         builder = builder.timeout(Duration::from_millis(timeout_ms as u64));
     }
 
-    let response = builder
-        .send()
-        .await
-        .map_err(|e| Error::new(Status::GenericFailure, format!("request failed: {e}")))?;
+    let response = builder.send().await.map_err(|e| {
+        Error::new(
+            Status::GenericFailure,
+            format!("[{}] request failed: {e}", classify_request_error(&e)),
+        )
+    })?;
 
     let status = response.status();
     let final_url = response.uri().to_string();
@@ -1087,7 +1143,10 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
         let chunk = chunk.map_err(|e| {
             Error::new(
                 Status::GenericFailure,
-                format!("failed to read response body: {e}"),
+                format!(
+                    "[{}] failed to read response body: {e}",
+                    classify_request_error(&e)
+                ),
             )
         })?;
         let remaining = max_response_bytes.saturating_sub(body.len());
@@ -1095,7 +1154,7 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
             return Err(Error::new(
                 Status::GenericFailure,
                 format!(
-                    "response body exceeds maxResponseBytes limit of {max_response_bytes} bytes"
+                    "[RESPONSE_TOO_LARGE] response body exceeds maxResponseBytes limit of {max_response_bytes} bytes"
                 ),
             ));
         }

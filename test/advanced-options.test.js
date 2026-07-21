@@ -188,6 +188,21 @@ test('an invalid proxy URL is rejected with a clear error', async () => {
   await assert.rejects(fetch('https://example.com', { proxy: 'not a url' }))
 })
 
+test('invalid tlsOptions reject as an argument error (InvalidArg), not a FetchError', async () => {
+  // A cipher string the TLS backend rejects fails while building the client,
+  // before any network. It is caller input, so it surfaces as InvalidArg with a
+  // message naming the option — not a transport-level FetchError.
+  await assert.rejects(
+    fetch('https://example.com', { tlsOptions: { cipherList: 'NOT-A-REAL-CIPHER' } }),
+    (err) => {
+      assert.equal(err.code, 'InvalidArg')
+      assert.notEqual(err.name, 'FetchError')
+      assert.match(err.message, /invalid tlsOptions/)
+      return true
+    }
+  )
+})
+
 test('platform overrides the declared OS in headers without changing impersonate', async () => {
   await withServer(
     (req, res) => {

@@ -36,6 +36,72 @@ const PASSTHROUGH_KEYS = [
   'tlsOptions',
 ]
 
+// Stable transport-failure codes the native layer tags onto its error message
+// as a `[CODE] ` prefix (see `classify_request_error` in src/lib.rs). Kept in
+// sync with that Rust function — the wrapper trusts a leading tag only when the
+// code is one of these, so a server error message that merely happens to start
+// with bracketed upper-case text is never mistaken for a code.
+const NATIVE_ERROR_CODES = new Set([
+  'PROXY_CONNECT',
+  'TIMEOUT',
+  'CONNECT',
+  'CONNECTION_RESET',
+  'REDIRECT',
+  'DECODE',
+  'BODY',
+  'REQUEST',
+  'REQUEST_FAILED',
+  'RESPONSE_TOO_LARGE',
+])
+
+const TAGGED_ERROR = /^\[([A-Z_]+)\] ([\s\S]*)$/
+
+/**
+ * Error thrown when a request fails at the transport layer (connection, proxy,
+ * TLS, timeout, body). `code` is one of {@link NATIVE_ERROR_CODES}; the raw
+ * native error is kept on `cause`. Argument-validation problems (a bad option,
+ * an invalid proxy URL) still throw the native `Error`/`TypeError` unchanged.
+ */
+class FetchError extends Error {
+  constructor(message, code, options) {
+    super(message, options)
+    this.name = 'FetchError'
+    this.code = code
+  }
+}
+
+// Turn a native transport error carrying a `[CODE] ` message tag into a
+// `FetchError` with that code lifted out and the tag stripped from the message.
+// Anything without a recognized tag (e.g. an `InvalidArg` from bad options) is
+// passed through untouched so its own `.code` and type survive.
+function enrichNativeError(err) {
+  if (err instanceof Error && typeof err.message === 'string') {
+    const match = TAGGED_ERROR.exec(err.message)
+    if (match && NATIVE_ERROR_CODES.has(match[1])) {
+      return new FetchError(match[2], match[1], { cause: err })
+    }
+  }
+  return err
+}
+
+// `resolve` (client-side IP pinning) has no effect once a `proxy` is set,
+// because the proxy resolves the origin hostname. That is documented, but was
+// silently dropped at runtime; warn once per process so the contradiction is
+// visible without spamming a hot path. A hard error was considered and rejected
+// (see CHANGELOG) — a caller that always passes `resolve` and only sometimes a
+// `proxy` is a legitimate pattern that must not break.
+let resolveIgnoredWarned = false
+function warnResolveIgnored() {
+  if (resolveIgnoredWarned) return
+  resolveIgnoredWarned = true
+  if (typeof process !== 'undefined' && typeof process.emitWarning === 'function') {
+    process.emitWarning(
+      '`resolve` is ignored when `proxy` is set: the proxy, not this client, resolves the origin hostname.',
+      { code: 'MYFETCH_RESOLVE_IGNORED' }
+    )
+  }
+}
+
 function normalizeMethod(method) {
   if (method == null) return undefined
   const upper = String(method).toUpperCase()
@@ -201,7 +267,16 @@ async function fetch(input, init) {
   if (finalHeaders !== undefined) options.headers = finalHeaders
   if (bodyValue !== undefined) options.body = bodyValue
 
-  const native = await nativeFetch(url, options)
+  if (options.proxy !== undefined && options.resolve !== undefined) {
+    warnResolveIgnored()
+  }
+
+  let native
+  try {
+    native = await nativeFetch(url, options)
+  } catch (err) {
+    throw enrichNativeError(err)
+  }
   return new FetchResponse(native)
 }
 
@@ -312,6 +387,7 @@ class FetchResponse {
 module.exports = {
   fetch,
   FetchResponse,
+  FetchError,
   FetchHeaders: binding.FetchHeaders,
   listImpersonatePresets: binding.listImpersonatePresets,
   clearSession: binding.clearSession,

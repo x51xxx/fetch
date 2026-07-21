@@ -103,6 +103,49 @@ if (!res.ok) {
 const data = await res.json()
 ```
 
+Transport-level rejections are a `FetchError` carrying a stable `code`, so
+proxy-rotation and retry logic can branch on the failure kind instead of
+matching error strings. What each of the load-bearing codes means:
+
+- `PROXY_CONNECT` — the connection to the proxy failed (refused, reset). The
+  fault is localized to the proxy, and this wins even when the failure also
+  timed out.
+- `CONNECT` — the connection to the origin failed. A request-time TLS handshake
+  or certificate failure also lands here (there is no separate `TLS` code — see
+  below).
+- `TIMEOUT` — `timeoutMs` elapsed. This is stage-agnostic: it can fire while
+  connecting to the proxy, connecting to the origin, during the TLS handshake,
+  or awaiting the response, so on its own it does _not_ tell you whether the
+  proxy or the origin was at fault. An unresponsive proxy with `timeoutMs` set
+  usually reads as `TIMEOUT`.
+
+So for rotation, treat both `PROXY_CONNECT` and `TIMEOUT` as "this proxy may be
+dead." The raw native error is kept on `err.cause`.
+
+```js
+const { fetch, FetchError } = require('@trishchuk/fetch')
+
+try {
+  const res = await fetch(url, { proxy })
+  // ...
+} catch (err) {
+  if (err instanceof FetchError && err.code === 'PROXY_CONNECT') {
+    // this proxy is dead — rotate to the next one and retry
+  } else {
+    throw err
+  }
+}
+```
+
+`code` is one of `PROXY_CONNECT`, `TIMEOUT`, `CONNECT`, `CONNECTION_RESET`,
+`REDIRECT`, `DECODE`, `BODY`, `REQUEST`, `REQUEST_FAILED` (uncategorized
+transport failure), or `RESPONSE_TOO_LARGE` (body over `maxResponseBytes`).
+Option-validation problems reject with the underlying `Error`/`TypeError` (not a
+`FetchError`), as before, and carry `code: 'InvalidArg'`: a bad `impersonate`
+name, an invalid `proxy` URL, a malformed `tlsMinVersion`, or invalid
+`tlsOptions` (an unknown `cipherList`/`curvesList`/`sigalgsList` rejects with an
+"invalid tlsOptions: …" message).
+
 ## Use cases
 
 ### 1. Basic impersonated GET/POST
@@ -323,7 +366,8 @@ An initial request's `resolve` map is never installed for a redirect to another
 host (same-host redirects keep using the initial host's pin), so SSRF-sensitive
 code must use `redirect: "manual"` and repeat resolution, validation, and
 pinning for each `Location`. `resolve` is ignored when `proxy` is set because
-the proxy, not this client's direct connector, resolves the origin hostname.
+the proxy, not this client's direct connector, resolves the origin hostname;
+setting both emits a one-time `MYFETCH_RESOLVE_IGNORED` process warning.
 If the flow needs cookies (a login that redirects, say), add a `session`: the
 per-hop pinned clients all share that session's cookie jar, so cookies survive
 the hops while every connection stays pinned.

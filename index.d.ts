@@ -104,7 +104,46 @@ export declare class FetchResponse {
   blob(): Promise<Blob>
 }
 
-/** WHATWG-shaped fetch with TLS/HTTP2 fingerprint control. */
+/**
+ * Stable transport-failure categories carried on {@link FetchError.code}.
+ *
+ * `PROXY_CONNECT` (the connection to the proxy failed) vs `CONNECT` (the origin
+ * connection failed) is the key distinction for proxy rotation. A request-time
+ * TLS handshake or certificate failure is reported as `CONNECT` — there is no
+ * separate `TLS` code (see the note below). `TIMEOUT` means `timeoutMs` elapsed
+ * and is stage-agnostic: it does not by itself say whether the proxy or the
+ * origin was at fault.
+ */
+export type FetchErrorCode =
+  | 'PROXY_CONNECT'
+  | 'TIMEOUT'
+  | 'CONNECT'
+  | 'CONNECTION_RESET'
+  | 'REDIRECT'
+  | 'DECODE'
+  | 'BODY'
+  | 'REQUEST'
+  | 'REQUEST_FAILED'
+  | 'RESPONSE_TOO_LARGE'
+
+/**
+ * Thrown when a request fails at the transport layer (connection, proxy,
+ * timeout, or body). The originating native error is preserved on `cause`.
+ * Option-validation failures reject with the native `Error`/`TypeError` instead
+ * (not a `FetchError`), with `code: 'InvalidArg'`: a bad option, an invalid
+ * `proxy` URL, or invalid `tlsOptions` (e.g. an unknown `cipherList`, rejected
+ * with an "invalid tlsOptions: …" message).
+ */
+export declare class FetchError extends Error {
+  readonly name: 'FetchError'
+  readonly code: FetchErrorCode
+  readonly cause?: unknown
+}
+
+/**
+ * WHATWG-shaped fetch with TLS/HTTP2 fingerprint control. Rejects with a
+ * {@link FetchError} (carrying a `code`) on transport failure.
+ */
 export declare function fetch(input: FetchInput, init?: FetchInit): Promise<FetchResponse>
 
 /** Lists every curl-impersonate preset name accepted by `impersonate`. */

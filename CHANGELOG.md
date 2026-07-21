@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Transport-level failures now reject with a `FetchError` carrying a stable,
+  machine-readable `code` instead of a single opaque `"request failed"` string.
+  Codes are `PROXY_CONNECT`, `TIMEOUT`, `CONNECT`, `CONNECTION_RESET`,
+  `REDIRECT`, `DECODE`, `BODY`, `REQUEST`, `REQUEST_FAILED`, and
+  `RESPONSE_TOO_LARGE`. This lets proxy-rotation logic distinguish a dead proxy
+  (`PROXY_CONNECT`) from an unreachable origin (`CONNECT`) without parsing error
+  text. The originating native error is preserved on `err.cause`, and
+  `FetchError` is exported for `instanceof` checks. There is deliberately no
+  `TLS` code: request-time TLS handshake and certificate failures are wrapped by
+  the connector as a connect error and so surface as `CONNECT`, while invalid
+  TLS *configuration* (a bad `cipherList`, etc.) fails earlier at client-build
+  time. `TIMEOUT` is stage-agnostic and does not localize the fault to the proxy
+  vs. the origin. Option-validation errors (bad `impersonate`, invalid `proxy`
+  URL, malformed `tlsMinVersion`, invalid `tlsOptions`) continue to reject with
+  the underlying `Error`/`TypeError`.
+
+### Changed
+
+- Invalid `tlsOptions` (a `cipherList`/`curvesList`/`sigalgsList` the TLS backend
+  rejects) now fail with `code: 'InvalidArg'` and an `"invalid tlsOptions: …"`
+  message, instead of the previous opaque `GenericFailure`
+  `"failed to build client: …"`. This is caller input, so it is now reported like
+  the other option-validation errors. Build failures unrelated to caller-supplied
+  TLS overrides remain `GenericFailure`.
+- Passing both `resolve` and `proxy` now emits a one-time `process` warning
+  (`MYFETCH_RESOLVE_IGNORED`) instead of silently dropping the `resolve` pin.
+  The behavior is unchanged — the proxy still resolves the origin hostname, so
+  the pin has no effect — but the contradiction is no longer invisible at
+  runtime. A hard error was deliberately rejected: a caller that always sets
+  `resolve` and only sometimes sets `proxy` is a legitimate pattern that must
+  not break. Restoring client-side resolution for SOCKS5 (`socks5` vs
+  `socks5h`) is left as a follow-up pending verification of wreq's SOCKS + DNS
+  override behavior.
+
 ## [1.1.0] - 2026-07-19
 
 ### Added
