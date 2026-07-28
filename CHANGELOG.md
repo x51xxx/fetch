@@ -7,7 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-28
+
 ### Added
+
+- **Streaming response bodies** via a new `stream: true` request option. The
+  promise resolves as soon as response headers arrive and `response.body` is a
+  WHATWG `ReadableStream<Uint8Array>`, so peak memory tracks the chunk size
+  rather than the response size. Measured on a 2 GiB download: **~206 MiB peak
+  RSS streamed vs ~4.1 GiB buffered**, roughly a 20x reduction, with the figure
+  staying flat as the body grows (182/202/206 MiB at 256 MiB/1 GiB/2 GiB).
+  Reproduce with `node bench/memory-large-file.mjs 256 1024 2048`. Those figures
+  come from an Apple M3 Max (arm64, 16 cores, 48 GB, macOS 26.3, Node v24.18.0)
+  over loopback; the buffered column moves 20–25% between runs with GC timing,
+  so treat them as the shape of the difference rather than portable absolutes —
+  the flat streaming column is the reproducible part. Before this,
+  a body larger than `maxResponseBytes` (32 MiB by default) was not slow but
+  outright impossible.
+
+  Streaming is **opt-in and the default stays buffered**, because it changes
+  error timing: a mid-body failure now rejects while reading the stream instead
+  of rejecting `fetch()`. Making it the default would silently break existing
+  `try { await fetch() } catch` callers.
+
+  The streamed response is WHATWG-faithful where the buffered one deliberately
+  is not: the body is genuinely one-shot (`bodyUsed` is real, a second accessor
+  throws `TypeError`), null-body statuses and `HEAD` give `body === null`, and
+  it also exposes `cancel()` and `Symbol.asyncDispose`. In a differential test
+  against Node's built-in `fetch` (undici) the streaming path matches on 17 of
+  18 scenarios versus 15 of 18 for the buffered path (`node
+  test/undici-parity.mjs`); the one streaming gap is `clone()`, which throws by
+  design (below).
+
+  The TLS/HTTP2 fingerprint is unchanged by streaming — both entry points share
+  one request-building path in Rust, and JA4, the Akamai HTTP/2 hash, and
+  peetprint are byte-identical across the two modes when compared on fresh
+  handshakes. (Compare fresh handshakes only: a resumed TLS session legitimately
+  shifts JA4's first segment.)
+
+  `maxResponseBytes` is mode-dependent and worth reading carefully: on the
+  buffered path it keeps its 32 MiB default; with `stream: true` it is **unset
+  by default** (unbounded is the point) but an explicit value still applies as a
+  cumulative cap, and an explicit `0` rejects the first non-empty chunk rather
+  than meaning "unlimited". The buffering accessors (`text()`, `json()`,
+  `bytes()`, `arrayBuffer()`, `blob()`) always re-apply the 32 MiB limit even on
+  a streamed response, since they materialize the body — otherwise `stream: true`
+  followed by `.json()` would reintroduce the very exhaustion the cap prevents.
+
+  Documented download idiom:
+
+  ```js
+  const res = await fetch(url, { stream: true })
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(path))
+  ```
+
+- `response.clone()` on a buffered response. The body is already buffered
+  natively, so this copies no payload at all — only the wrapper — and each copy
+  keeps its own `bodyUsed` and its own `Headers`. It deliberately does **not**
+  throw when `bodyUsed` is true: on this path `bodyUsed` is advisory and the
+  accessors are re-readable, so refusing to clone a response you can still
+  re-read would be a stricter rule for the weaker operation.
+
+  On a **streamed** response `clone()` throws `TypeError` by design. WHATWG
+  defines it as `tee()`, and `tee()` buffers the slower branch without bound, so
+  a caller who reads one branch and ignores the other would hold the whole body
+  in memory — undoing the point of `stream: true`. It would also break
+  backpressure and cannot split the single cumulative `maxResponseBytes`
+  counter. The primitive remains available and self-documenting: call
+  `response.body.tee()` directly to opt into that cost.
 
 - Transport-level failures now reject with a `FetchError` carrying a stable,
   machine-readable `code` instead of a single opaque `"request failed"` string.
@@ -147,6 +214,7 @@ run failed while assembling the platform packages (see the build fix below).
   against Node's built-in `fetch`, plus an HTML report and methodology
   writeup under `docs/`.
 
+[1.2.0]: https://github.com/x51xxx/fetch/releases/tag/v1.2.0
 [1.1.0]: https://github.com/x51xxx/fetch/releases/tag/v1.1.0
 [1.0.1]: https://github.com/x51xxx/fetch/releases/tag/v1.0.1
 [1.0.0]: https://github.com/x51xxx/fetch/releases/tag/v1.0.0

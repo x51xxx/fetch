@@ -32,6 +32,15 @@ module.exports = [
     },
   },
   {
+    // `.mjs` is ESM by definition; the repo default above is commonjs because
+    // the package itself is. These also use top-level await, hence ES2023+.
+    files: ['**/*.mjs'],
+    languageOptions: {
+      sourceType: 'module',
+      ecmaVersion: 2024,
+    },
+  },
+  {
     // k6 scenario scripts run inside k6's own goja/ES-module runtime, not
     // Node — `import ... from 'k6/http'` etc. are k6-virtual modules.
     files: ['bench/k6-scenario.js'],

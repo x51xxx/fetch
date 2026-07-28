@@ -69,8 +69,24 @@ export interface FetchInit {
   session?: string
   /** Overall request timeout in milliseconds. */
   timeoutMs?: number
-  /** Maximum buffered response body size in bytes. Defaults to 32 MiB. */
+  /**
+   * Maximum buffered response body size in bytes. Defaults to 32 MiB.
+   *
+   * With `stream: true` this is **unset by default** (no cap — not holding the
+   * body in memory is the point); pass a value for an explicit cumulative cap.
+   * Note the buffering accessors (`text()`/`json()`/…) always re-apply the
+   * 32 MiB limit even on a streamed response, since they materialize the body.
+   */
   maxResponseBytes?: number
+  /**
+   * Do not buffer the response body. `fetch()` resolves as soon as headers
+   * arrive and `response.body` becomes a WHATWG `ReadableStream<Uint8Array>`,
+   * so peak memory tracks the chunk size rather than the response size.
+   *
+   * Changes error timing: a mid-body failure rejects while reading the stream
+   * instead of rejecting `fetch()`. That is why this is opt-in.
+   */
+  stream?: boolean
   /** Minimum TLS version to offer: `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"`. Client-level. */
   tlsMinVersion?: string
   /** Maximum TLS version to offer. Client-level. */
@@ -102,6 +118,15 @@ export declare class FetchResponse {
   text(): Promise<string>
   json(): Promise<any>
   blob(): Promise<Blob>
+  /**
+   * An independent view over the same response. Copies no payload — the body is
+   * already buffered natively — only the wrapper, so each copy has its own
+   * `bodyUsed` and `Headers`.
+   *
+   * Unlike WHATWG this does **not** throw when `bodyUsed` is true, because on
+   * this path `bodyUsed` is advisory and the accessors are re-readable anyway.
+   */
+  clone(): FetchResponse
 }
 
 /**
@@ -141,9 +166,63 @@ export declare class FetchError extends Error {
 }
 
 /**
+ * A `fetch`-Response-shaped view over a response whose body is still on the
+ * wire, returned when `stream: true` is passed. Unlike {@link FetchResponse} the
+ * body is genuinely one-shot: reading it twice throws, and `bodyUsed` is real.
+ *
+ * Peak memory tracks the chunk size, not the response size — a multi-GB body
+ * never materializes. Measured: a 2 GiB download holds ~206 MiB RSS streamed vs
+ * ~4.1 GiB buffered (`node bench/memory-large-file.mjs`).
+ */
+export declare class StreamingFetchResponse {
+  readonly status: number
+  readonly statusText: string
+  readonly ok: boolean
+  readonly url: string
+  readonly redirected: boolean
+  readonly bodyUsed: boolean
+  readonly headers: Headers
+  readonly rawHeaders: FetchHeaders
+  /** `null` for 204/304 and for a body that was already taken. */
+  readonly body: ReadableStream<Uint8Array> | null
+  /**
+   * Requests cancellation of the transfer and releases the connection.
+   * Idempotent, and safe to call while a read is in flight.
+   *
+   * When a reader holds the stream this is **not** a resource-release barrier:
+   * it fires the native cancellation token, which an in-flight `read()` observes
+   * on its next poll and only then drops the body. Awaiting it means
+   * cancellation was requested, not that the socket is already closed.
+   */
+  cancel(): Promise<void>
+  [Symbol.asyncDispose](): Promise<void>
+  /** Buffering accessors — one-shot, and bounded by 32 MiB regardless of `maxResponseBytes`. */
+  arrayBuffer(): Promise<ArrayBuffer>
+  bytes(): Promise<Uint8Array>
+  text(): Promise<string>
+  json(): Promise<any>
+  blob(): Promise<Blob>
+  /**
+   * Always throws `TypeError` on a streamed response. WHATWG defines `clone()`
+   * as `tee()`, which buffers the slower branch without bound and would undo
+   * the point of `stream: true`. Call `response.body.tee()` directly if you
+   * accept that cost.
+   */
+  clone(): never
+}
+
+/**
  * WHATWG-shaped fetch with TLS/HTTP2 fingerprint control. Rejects with a
  * {@link FetchError} (carrying a `code`) on transport failure.
+ *
+ * With `stream: true` returns a {@link StreamingFetchResponse} instead, whose
+ * body is a `ReadableStream`. The TLS/HTTP2 fingerprint is identical either way
+ * (both paths share one request-building helper in `src/lib.rs`).
  */
+export declare function fetch(
+  input: FetchInput,
+  init: FetchInit & { stream: true }
+): Promise<StreamingFetchResponse>
 export declare function fetch(input: FetchInput, init?: FetchInit): Promise<FetchResponse>
 
 /** Lists every curl-impersonate preset name accepted by `impersonate`. */

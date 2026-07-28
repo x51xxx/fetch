@@ -2,12 +2,16 @@
 
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, SocketAddr};
+use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
-use futures_util::StreamExt;
+use bytes::Bytes;
+use futures_util::{Stream, StreamExt};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+use tokio_util::sync::CancellationToken;
 use wreq::cookie::Jar;
 use wreq::tls::TlsVersion;
 use wreq::{Client, IntoEmulation, Method, Proxy, Uri};
@@ -700,6 +704,7 @@ fn get_or_build_client(key: ClientKey) -> Result<Client> {
 }
 
 #[napi(object)]
+#[derive(Default)]
 pub struct FetchOptions {
     pub method: Option<String>,
     pub headers: Option<HashMap<String, String>>,
@@ -980,26 +985,20 @@ fn classify_request_error(e: &wreq::Error) -> &'static str {
     }
 }
 
-#[napi]
-pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchResponse> {
-    let options = options.unwrap_or(FetchOptions {
-        method: None,
-        headers: None,
-        body: None,
-        impersonate: None,
-        platform: None,
-        proxy: None,
-        resolve: None,
-        redirect: None,
-        session: None,
-        timeout_ms: None,
-        max_response_bytes: None,
-        tls_min_version: None,
-        tls_max_version: None,
-        http_version: None,
-        tls_options: None,
-    });
-
+/// Builds the client and sends the request, stopping once response headers are
+/// in. Returns the live `wreq::Response` (body **not** consumed) plus the
+/// originally requested URL, which the caller needs to compute `redirected`.
+///
+/// Both `fetch` and `fetch_streaming` funnel through here, and that is load
+/// bearing rather than mere tidiness: every fingerprint-relevant decision
+/// (`ClientKey`, emulation profile, `tlsOptions`, header ordering, proxy,
+/// `resolve`) is made in exactly one place. Duplicating this for the streaming
+/// entry point would let a newly-added option reach one path and not the other,
+/// and the streaming path would then silently emit a *different* TLS/HTTP2
+/// fingerprint than the buffered one -- the single worst failure mode this
+/// library can have, and one that a same-day regression test would not catch
+/// because it compares only the options that exist today.
+async fn send_request(url: String, options: FetchOptions) -> Result<(wreq::Response, String)> {
     let redirect_policy = parse_redirect_policy(options.redirect.as_deref())?;
     let client_key = ClientKey {
         impersonate: options
@@ -1099,6 +1098,16 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
         )
     })?;
 
+    Ok((response, requested_url))
+}
+
+/// Extracts the response metadata every entry point needs. Kept separate so the
+/// buffered and streaming paths cannot disagree about `redirected` or header
+/// casing/order.
+fn response_meta(
+    response: &wreq::Response,
+    requested_url: &str,
+) -> (u16, String, bool, String, bool, Vec<(String, String)>) {
     let status = response.status();
     let final_url = response.uri().to_string();
     // `response.uri()` is a parsed `http::Uri`, which normalizes an empty
@@ -1120,9 +1129,28 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
         })
         .collect();
 
+    (
+        status.as_u16(),
+        status.canonical_reason().unwrap_or_default().to_string(),
+        status.is_success(),
+        final_url,
+        redirected,
+        headers,
+    )
+}
+
+#[napi]
+pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchResponse> {
+    let options = options.unwrap_or_default();
+    // Read before `options` is moved into `send_request`.
     let max_response_bytes = options
         .max_response_bytes
         .unwrap_or(DEFAULT_MAX_RESPONSE_BYTES) as usize;
+
+    let (response, requested_url) = send_request(url, options).await?;
+    let (status, status_text, ok, final_url, redirected, headers) =
+        response_meta(&response, &requested_url);
+
     // Pre-size the buffer so a large body doesn't repeatedly realloc+memcpy as
     // it streams in. Content-Length is attacker-controlled, though, so it is a
     // hint and never a promise: a hostile server advertising 10 GB must not be
@@ -1162,12 +1190,197 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
     }
 
     Ok(FetchResponse {
-        status: status.as_u16(),
-        status_text: status.canonical_reason().unwrap_or_default().to_string(),
-        ok: status.is_success(),
+        status,
+        status_text,
+        ok,
         url: final_url,
         redirected,
         headers,
         body,
+    })
+}
+
+type BoxBodyStream = Pin<Box<dyn Stream<Item = wreq::Result<Bytes>> + Send>>;
+
+/// A response body that has **not** been read into memory. Chunks are pulled one
+/// at a time, so peak RSS tracks the chunk size (tens of KiB) rather than the
+/// response size.
+///
+/// Single-reader by contract: WHATWG locks a `ReadableStream` to one reader and
+/// the JS wrapper preserves that, so `read()` is never called concurrently. The
+/// mutex serializes anyway as a safety property rather than as a supported mode.
+#[napi]
+pub struct FetchBody {
+    stream: Arc<tokio::sync::Mutex<Option<BoxBodyStream>>>,
+    cancel: CancellationToken,
+    read_so_far: Arc<AtomicU64>,
+    max_bytes: Option<u64>,
+}
+
+#[napi]
+impl FetchBody {
+    /// Resolves the next chunk, or `null` at end of stream. After `null` (or an
+    /// error, or `cancel()`) the underlying stream is dropped and every
+    /// subsequent call resolves `null`.
+    #[napi]
+    pub async fn read(&self) -> Result<Option<Buffer>> {
+        let mut guard = self.stream.lock().await;
+        let Some(stream) = guard.as_mut() else {
+            return Ok(None);
+        };
+
+        // `select!` rather than checking a flag between chunks: a cancel that
+        // arrives while we are parked waiting on the network must take effect
+        // immediately, otherwise `cancel()` would block until the origin decides
+        // to send more data (or the connection times out).
+        let next = tokio::select! {
+            biased;
+            _ = self.cancel.cancelled() => {
+                *guard = None;
+                return Ok(None);
+            }
+            item = stream.next() => item,
+        };
+
+        match next {
+            None => {
+                // Drop at EOF so the connection returns to the pool promptly
+                // instead of waiting for the JS object to be collected.
+                *guard = None;
+                Ok(None)
+            }
+            Some(Err(e)) => {
+                *guard = None;
+                Err(Error::new(
+                    Status::GenericFailure,
+                    format!(
+                        "[{}] failed to read response body: {e}",
+                        classify_request_error(&e)
+                    ),
+                ))
+            }
+            Some(Ok(chunk)) => {
+                if let Some(max) = self.max_bytes {
+                    let total = self
+                        .read_so_far
+                        .fetch_add(chunk.len() as u64, Ordering::Relaxed)
+                        + chunk.len() as u64;
+                    if total > max {
+                        *guard = None;
+                        return Err(Error::new(
+                            Status::GenericFailure,
+                            format!(
+                                "[RESPONSE_TOO_LARGE] response body exceeds maxResponseBytes limit of {max} bytes"
+                            ),
+                        ));
+                    }
+                }
+                // One copy per chunk. `Buffer::from_external` over the `Bytes`
+                // would avoid it, but a Node Buffer is writable while `Bytes` may
+                // share immutable storage with other owners (hyper hands out
+                // slices of a shared read buffer), so handing JS a mutable view
+                // is only sound once unique ownership is proven via
+                // `Bytes::try_into_mut()`. Deferred until measurement shows the
+                // copy actually matters: chunks are tens of KiB, which is noise
+                // next to the network and disk syscalls around them.
+                Ok(Some(chunk.to_vec().into()))
+            }
+        }
+    }
+
+    /// Aborts the transfer and releases the connection. Idempotent, and safe to
+    /// call while a `read()` is in flight.
+    #[napi]
+    pub fn cancel(&self) {
+        self.cancel.cancel();
+        // Signalling the token is only half of it. The token is observed inside
+        // `read()`, so if no read is in flight -- and none ever comes, which is
+        // exactly the `await res.cancel()` straight after `fetch()` case -- the
+        // boxed stream and its connection would sit alive until the JS object is
+        // finalized. Drop it here instead.
+        //
+        // `try_lock` rather than blocking: a held lock means a `read()` IS in
+        // flight, and that path already drops the stream when the token fires.
+        // Dropping is all this does -- never spawn from here, since a Drop that
+        // touches the runtime would panic outside a runtime context.
+        if let Ok(mut guard) = self.stream.try_lock() {
+            *guard = None;
+        }
+    }
+}
+
+/// Headers-first response whose body is still on the wire.
+#[napi]
+pub struct StreamingFetchResponse {
+    #[napi(readonly)]
+    pub status: u16,
+    #[napi(readonly)]
+    pub status_text: String,
+    #[napi(readonly)]
+    pub ok: bool,
+    #[napi(readonly)]
+    pub url: String,
+    #[napi(readonly)]
+    pub redirected: bool,
+    headers: Vec<(String, String)>,
+    body: Mutex<Option<FetchBody>>,
+}
+
+#[napi]
+impl StreamingFetchResponse {
+    #[napi(getter)]
+    pub fn headers(&self) -> FetchHeaders {
+        FetchHeaders {
+            entries: self.headers.clone(),
+        }
+    }
+
+    /// Hands the body out exactly once; a second call returns `null`. That single
+    /// ownership transfer is what makes `bodyUsed` meaningful on this path.
+    #[napi]
+    pub fn take_body(&self) -> Option<FetchBody> {
+        self.body.lock().ok().and_then(|mut b| b.take())
+    }
+}
+
+/// Like `fetch`, but resolves as soon as response headers are in, leaving the
+/// body to be pulled incrementally.
+///
+/// The split matters for error timing: `fetch` cannot resolve until the body has
+/// been read, so a mid-body failure rejects the `fetch` promise. Here the promise
+/// is already resolved, so the same failure surfaces from `FetchBody::read`
+/// instead. That difference is why streaming is opt-in rather than the default.
+#[napi]
+pub async fn fetch_streaming(
+    url: String,
+    options: Option<FetchOptions>,
+) -> Result<StreamingFetchResponse> {
+    let options = options.unwrap_or_default();
+    // `None` means "omitted", which on this path means no cap -- streaming
+    // exists precisely so a body need not fit in memory. An explicit value is
+    // honoured verbatim, *including* 0: `maxResponseBytes: 0` must reject the
+    // first non-empty chunk here exactly as it does on the buffered path, so it
+    // cannot be folded into "unlimited".
+    let max_bytes = options.max_response_bytes.map(u64::from);
+
+    let (response, requested_url) = send_request(url, options).await?;
+    let (status, status_text, ok, final_url, redirected, headers) =
+        response_meta(&response, &requested_url);
+
+    Ok(StreamingFetchResponse {
+        status,
+        status_text,
+        ok,
+        url: final_url,
+        redirected,
+        headers,
+        body: Mutex::new(Some(FetchBody {
+            stream: Arc::new(tokio::sync::Mutex::new(Some(Box::pin(
+                response.bytes_stream(),
+            )))),
+            cancel: CancellationToken::new(),
+            read_so_far: Arc::new(AtomicU64::new(0)),
+            max_bytes,
+        })),
     })
 }

@@ -14,6 +14,18 @@
 const binding = require('./binding.js')
 
 const nativeFetch = binding.fetch
+const nativeFetchStreaming = binding.fetchStreaming
+
+// Cap re-applied when a *streamed* response is materialized via text()/json()/
+// arrayBuffer()/bytes()/blob(). Those accessors buffer by definition, so without
+// this a `stream: true` caller who then calls `.json()` would reintroduce exactly
+// the unbounded allocation streaming exists to avoid. Mirrors
+// DEFAULT_MAX_RESPONSE_BYTES in src/lib.rs.
+const BUFFERED_ACCESSOR_LIMIT = 32 * 1024 * 1024
+
+// WHATWG "null body status" list. Responses with these statuses have no body at
+// all, so `response.body` is `null` rather than an empty stream.
+const NULL_BODY_STATUS = new Set([101, 103, 204, 205, 304])
 
 // WHATWG normalizes exactly this set of method names to upper case and leaves
 // any other (custom) method untouched.
@@ -271,6 +283,20 @@ async function fetch(input, init) {
     warnResolveIgnored()
   }
 
+  if (init.stream === true) {
+    // `maxResponseBytes` is forwarded untouched. Omitted means no cap on this
+    // path (the native side reads `None` as unlimited), and an explicit 0 stays
+    // 0 so it rejects the first non-empty chunk just like the buffered path --
+    // it must not be quietly promoted to "unlimited".
+    let nativeStream
+    try {
+      nativeStream = await nativeFetchStreaming(url, options)
+    } catch (err) {
+      throw enrichNativeError(err)
+    }
+    return new StreamingFetchResponse(nativeStream, method)
+  }
+
   let native
   try {
     native = await nativeFetch(url, options)
@@ -382,11 +408,288 @@ class FetchResponse {
     const type = this.#native.headers.get('content-type') || ''
     return new Blob([buf], { type })
   }
+
+  /**
+   * An independent view over the same response. The body is already buffered
+   * natively, so this copies no payload at all — only the wrapper. Each copy
+   * keeps its own `bodyUsed` and its own lazily-built `Headers`, so reading or
+   * mutating one does not affect the other.
+   *
+   * Unlike WHATWG this does **not** throw when `bodyUsed` is true. On this path
+   * `bodyUsed` is advisory and `text()` may be called repeatedly; refusing to
+   * clone a response you can still re-read would be a stricter rule for the
+   * weaker operation. See docs/fetch-compatibility.md.
+   */
+  clone() {
+    return new FetchResponse(this.#native)
+  }
+}
+
+/**
+ * A `fetch`-Response-shaped view over a response whose body is still on the
+ * wire. Unlike {@link FetchResponse}, the body is genuinely one-shot: peak
+ * memory tracks the chunk size, not the response size, so a multi-GB download
+ * never materializes.
+ *
+ * Error timing differs from the buffered path on purpose. `fetch()` here
+ * resolves as soon as headers arrive, so a mid-body failure rejects while
+ * reading the stream rather than from `fetch()` itself. That is why streaming is
+ * opt-in.
+ */
+class StreamingFetchResponse {
+  #native
+  #headers
+  #body // lazily-built WHATWG ReadableStream
+  #bodyUsed = false
+  #taken = false
+  #nativeBody = null
+  #method
+
+  constructor(native, method) {
+    this.#native = native
+    this.#method = method
+  }
+
+  get status() {
+    return this.#native.status
+  }
+
+  get statusText() {
+    return this.#native.statusText
+  }
+
+  get ok() {
+    return this.#native.ok
+  }
+
+  get url() {
+    return this.#native.url
+  }
+
+  get redirected() {
+    return this.#native.redirected
+  }
+
+  get bodyUsed() {
+    return this.#bodyUsed
+  }
+
+  get headers() {
+    if (this.#headers === undefined) {
+      const headers = new Headers()
+      for (const [name, value] of this.#native.headers.entries()) {
+        try {
+          headers.append(name, value)
+        } catch {
+          /* preserved in rawHeaders */
+        }
+      }
+      this.#headers = headers
+    }
+    return this.#headers
+  }
+
+  get rawHeaders() {
+    return this.#native.headers
+  }
+
+  /**
+   * WHATWG `ReadableStream<Uint8Array>`, or `null` for a response that cannot
+   * carry a body. Built once and cached, so `res.body === res.body`.
+   */
+  get body() {
+    if (this.#body !== undefined) return this.#body
+    // WHATWG null-body cases: the null-body status list, plus HEAD and CONNECT
+    // responses (which never carry one regardless of status). Returning an empty
+    // ReadableStream here instead would be observably wrong — `res.body` must be
+    // `null`, and undici agrees.
+    if (
+      NULL_BODY_STATUS.has(this.status) ||
+      this.#method === 'HEAD' ||
+      this.#method === 'CONNECT'
+    ) {
+      // Release the native body rather than leaving it to the finalizer. For a
+      // 204 or a HEAD there is nothing on the wire and this is a formality, but
+      // a 101 or CONNECT can leave a live stream — and its socket — attached to
+      // a response we are about to declare body-less.
+      if (!this.#taken) {
+        this.#taken = true
+        this.#native.takeBody()?.cancel()
+      }
+      this.#body = null
+      return null
+    }
+
+    const nativeBody = this.#taken ? null : this.#native.takeBody()
+    this.#taken = true
+    if (nativeBody == null) {
+      this.#body = null
+      return null
+    }
+    // Held so `cancel()` can reach the native token even once the stream is
+    // locked to a reader. The native side hands the body out exactly once, so
+    // re-calling `takeBody()` later would return null and silently cancel
+    // nothing -- which is precisely the case (a parked `read()`) where
+    // cancellation matters most.
+    this.#nativeBody = nativeBody
+
+    const markUsed = () => {
+      this.#bodyUsed = true
+    }
+    this.#body = new ReadableStream(
+      {
+        // Pull-based: exactly one native read per `pull`, so the consumer
+        // governs how far ahead we read. This is what makes backpressure reach
+        // all the way to the TCP window.
+        async pull(controller) {
+          markUsed()
+          let chunk
+          try {
+            chunk = await nativeBody.read()
+          } catch (err) {
+            controller.error(enrichNativeError(err))
+            return
+          }
+          if (chunk == null) {
+            controller.close()
+            return
+          }
+          controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength))
+        },
+        cancel() {
+          markUsed()
+          nativeBody.cancel()
+        },
+      },
+      // highWaterMark 0 is load bearing, not a tuning knob. At the default of 1
+      // the stream speculatively calls `pull()` to fill its queue the moment it
+      // is constructed, so merely touching `response.body` and yielding would
+      // flip `bodyUsed` and make a later `text()` throw on a stream nobody read.
+      // With 0 the source is fully lazy: `pull()` runs only for a real read, so
+      // it is a truthful signal of consumption — and nothing is fetched ahead of
+      // what the consumer asked for.
+      { highWaterMark: 0 }
+    )
+    return this.#body
+  }
+
+  /**
+   * Requests cancellation of the transfer and releases the connection.
+   * Idempotent, and safe to call while a read is in flight.
+   *
+   * Note the promise is **not** a resource-release barrier when a reader holds
+   * the stream: it fires the native cancellation token, which an in-flight
+   * `read()` observes on its next poll and only then drops the body. Awaiting
+   * this tells you cancellation was requested, not that the socket is already
+   * closed. With no reader attached, the stream's own `cancel()` runs and the
+   * body is dropped before the promise settles.
+   */
+  async cancel() {
+    const body = this.body
+    // Nothing to cancel, and nothing to disturb — `bodyUsed` stays false.
+    if (body == null) return
+    if (!body.locked) {
+      await body.cancel() // routes through the source's cancel(), which marks used
+    } else if (this.#nativeBody) {
+      // Locked by an active reader, so the stream's cancel() is unreachable.
+      // Fire the native CancellationToken directly: that is what unblocks a
+      // `read()` already parked on the socket.
+      this.#nativeBody.cancel()
+      this.#bodyUsed = true
+    }
+  }
+
+  async [Symbol.asyncDispose]() {
+    await this.cancel()
+  }
+
+  // Buffering accessors. One-shot, WHATWG-style, and bounded — see
+  // BUFFERED_ACCESSOR_LIMIT.
+  async #consume() {
+    if (this.#bodyUsed) throw new TypeError('Body is unusable: Body has already been read')
+    const body = this.body
+    if (body == null) {
+      // A null body can never become disturbed, so per WHATWG `bodyUsed` stays
+      // false and the accessors keep returning an empty body however many times
+      // they are called. Marking it used here would make a second `text()` on a
+      // 204 throw, which undici does not do.
+      return Buffer.alloc(0)
+    }
+    const reader = body.getReader()
+    const chunks = []
+    let total = 0
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        total += value.byteLength
+        if (total > BUFFERED_ACCESSOR_LIMIT) {
+          await reader.cancel()
+          throw new FetchError(
+            `buffered response body exceeds ${BUFFERED_ACCESSOR_LIMIT} bytes; read \`response.body\` as a stream instead`,
+            'RESPONSE_TOO_LARGE'
+          )
+        }
+        chunks.push(value)
+      }
+    } finally {
+      this.#bodyUsed = true
+      reader.releaseLock()
+    }
+    return Buffer.concat(chunks, total)
+  }
+
+  async arrayBuffer() {
+    const buf = await this.#consume()
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  }
+
+  async bytes() {
+    const buf = await this.#consume()
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+  }
+
+  async text() {
+    return (await this.#consume()).toString('utf-8')
+  }
+
+  async json() {
+    return JSON.parse((await this.#consume()).toString('utf-8'))
+  }
+
+  async blob() {
+    const buf = await this.#consume()
+    return new Blob([buf], { type: this.#native.headers.get('content-type') || '' })
+  }
+
+  /**
+   * Deliberately unsupported on a streamed response.
+   *
+   * WHATWG defines `clone()` in terms of `tee()`, and `tee()` buffers for the
+   * slower branch without bound. A caller who reads one branch and ignores the
+   * other would hold the entire body in memory — reintroducing exactly what
+   * `stream: true` exists to prevent (measured: 206 MiB streamed vs 4.1 GiB
+   * buffered on a 2 GiB body). It would also break backpressure, since the
+   * `{ highWaterMark: 0 }` source stops being lazy once tee() drives it at the
+   * faster branch's pace, and `maxResponseBytes` is a single cumulative counter
+   * in Rust that does not split per branch.
+   *
+   * The primitive is still available and self-documenting: call
+   * `response.body.tee()` directly if you accept that cost.
+   */
+  clone() {
+    throw new TypeError(
+      'clone() is not supported on a streamed response: teeing a stream buffers the ' +
+        'slower branch without bound, which defeats the point of `stream: true`. ' +
+        'Use `response.body.tee()` explicitly if you accept that cost.'
+    )
+  }
 }
 
 module.exports = {
   fetch,
   FetchResponse,
+  StreamingFetchResponse,
   FetchError,
   FetchHeaders: binding.FetchHeaders,
   listImpersonatePresets: binding.listImpersonatePresets,

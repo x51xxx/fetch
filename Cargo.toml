@@ -20,6 +20,13 @@ wreq = { version = "6.0.0-rc.29", features = ["json", "cookies", "gzip", "brotli
 wreq-util = { version = "3.0.0-rc.14", features = ["emulation-serde"] }
 serde_json = "1"
 futures-util = "0.3"
+# Streaming response bodies (see docs/streaming-design.md). `bytes` and `tokio`
+# are pulled in transitively by wreq/napi, but the crate names are not usable
+# until declared here -- naming `bytes::Bytes` or `tokio::select!` without these
+# fails with E0433.
+bytes = "1"
+tokio = { version = "1", features = ["sync", "macros"] }
+tokio-util = "0.7"
 
 [build-dependencies]
 napi-build = "2"
