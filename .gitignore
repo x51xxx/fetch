@@ -6,3 +6,6 @@ node_modules
 bench/results
 bench/report-data.json
 .env
+# Local MCP server wiring for AI coding tools — developer-machine config, not
+# part of the package.
+.mcp.json
