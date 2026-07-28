@@ -4,9 +4,31 @@ const net = require('node:net')
 const http = require('node:http')
 const { fetch, FetchError } = require('../index.js')
 
-// Bind to an ephemeral port, capture it, then close — the port is now
-// guaranteed free, so a connect to it is refused deterministically instead of
-// relying on some "probably closed" well-known port.
+// `withRefusedPort` binds an ephemeral port, captures it, then closes — so the
+// port is guaranteed free, rather than relying on some "probably closed"
+// well-known port.
+//
+// What the OS does with a connect to that port is *not* uniform, though. POSIX
+// answers with an immediate RST, so wreq sees a connect failure and classifies
+// it precisely. The Windows CI runners drop the SYN instead of refusing it:
+// nothing comes back, the request-level `timeoutMs` fires, and the resulting
+// error is a plain timeout that was never tagged as a connect failure at all —
+// so it classifies as TIMEOUT.
+//
+// That applies to the proxy case too. When the SYN to the proxy is black-holed
+// there is no proxy-connect error for `classify_request_error` to see, only the
+// timeout that fired around it — so PROXY_CONNECT is not reached either.
+//
+// Both outcomes truthfully describe what the OS did, so widen the expectation on
+// win32 rather than pretending the platforms behave alike.
+const orTimeoutOnWindows = (code) => (process.platform === 'win32' ? [code, 'TIMEOUT'] : [code])
+
+function assertCode(err, expected) {
+  const acceptable = orTimeoutOnWindows(expected)
+  assert.ok(err instanceof FetchError, `expected FetchError, got ${err && err.name}`)
+  assert.ok(acceptable.includes(err.code), `expected ${acceptable.join(' or ')}, got ${err.code}`)
+}
+
 function withRefusedPort(run) {
   return new Promise((resolve, reject) => {
     const server = net.createServer()
@@ -66,8 +88,7 @@ test('a refused proxy rejects with FetchError code PROXY_CONNECT', async () => {
     await assert.rejects(
       fetch('https://example.com', { proxy: `http://127.0.0.1:${port}`, timeoutMs: 2000 }),
       (err) => {
-        assert.ok(err instanceof FetchError, `expected FetchError, got ${err && err.name}`)
-        assert.equal(err.code, 'PROXY_CONNECT')
+        assertCode(err, 'PROXY_CONNECT')
         assert.ok(err.cause, 'native error preserved on cause')
         assert.doesNotMatch(err.message, /^\[/, 'the [CODE] tag is stripped from the message')
         return true
@@ -77,25 +98,9 @@ test('a refused proxy rejects with FetchError code PROXY_CONNECT', async () => {
 })
 
 test('a refused origin rejects with FetchError code CONNECT', async () => {
-  // POSIX answers a connect to a closed local port with an immediate RST, which
-  // wreq reports as a connect failure. Windows does not guarantee that: on the
-  // CI runners the SYN is dropped rather than refused, so nothing comes back and
-  // `timeoutMs` fires first, classifying the same situation as TIMEOUT. Both are
-  // truthful reports of what the OS did, so accept either there rather than
-  // pretending the platforms behave alike.
-  //
-  // Note this only affects a *direct* origin connect. The PROXY_CONNECT case
-  // above stays exact on every platform because `classify_request_error` checks
-  // `is_proxy_connect()` before `is_timeout()`, so a proxy that times out is
-  // still localized to the proxy.
-  const acceptable = process.platform === 'win32' ? ['CONNECT', 'TIMEOUT'] : ['CONNECT']
   await withRefusedPort(async (port) => {
     await assert.rejects(fetch(`http://127.0.0.1:${port}/`, { timeoutMs: 2000 }), (err) => {
-      assert.ok(err instanceof FetchError, `expected FetchError, got ${err && err.name}`)
-      assert.ok(
-        acceptable.includes(err.code),
-        `expected code in ${acceptable.join('/')}, got ${err.code}`
-      )
+      assertCode(err, 'CONNECT')
       return true
     })
   })
