@@ -1,18 +1,23 @@
 #![deny(clippy::all)]
 
 use std::collections::{HashMap, HashSet};
+use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
-use bytes::Bytes;
+use async_compression::tokio::bufread::{DeflateDecoder, ZlibDecoder};
+use bytes::{Bytes, BytesMut};
 use futures_util::{Stream, StreamExt};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+use tokio::io::AsyncRead;
+use tokio_util::io::{ReaderStream, StreamReader};
 use tokio_util::sync::CancellationToken;
 use wreq::cookie::Jar;
+use wreq::header::{CONTENT_ENCODING, CONTENT_LENGTH};
 use wreq::tls::TlsVersion;
 use wreq::{Client, IntoEmulation, Method, Proxy, Uri};
 use wreq_util::{Emulation as EmulationProfile, Platform, Profile};
@@ -618,6 +623,20 @@ fn build_client(key: &ClientKey, resolve: Option<&ResolveOverride>) -> Result<Cl
 
     let mut builder = Client::builder()
         .emulation(emulation)
+        // Take `Content-Encoding: deflate` away from wreq and decode it in
+        // `deflate_body_stream` instead, which accepts both flavours of the
+        // token the way browsers do. Load bearing rather than cosmetic: leaving
+        // wreq's decoder on would decode the body twice.
+        //
+        // Fingerprint-neutral, but only because of wreq-util's
+        // `emulation-compression` feature (see Cargo.toml): wreq's decompression
+        // layer fills in `accept-encoding` solely when the header is *vacant*,
+        // and with that feature on the emulation layer -- which sits outside it
+        // -- has already written the profile's own value. So the wire header
+        // stays whatever Chrome/Safari/Firefox sends, `deflate` included,
+        // regardless of what this client decodes itself. Turn that feature off
+        // and this line would silently stop advertising `deflate`.
+        .no_deflate()
         .redirect(wreq::redirect::Policy::default());
 
     if let Some(session) = &key.session {
@@ -1139,6 +1158,184 @@ fn response_meta(
     )
 }
 
+/// A body chunk can now fail two ways -- in the transport (wreq) or in our own
+/// deflate decoder -- and the two carry different error classes, so the stream
+/// item keeps them apart instead of flattening both into `io::Error`.
+enum BodyError {
+    Transport(wreq::Error),
+    Decode(io::Error),
+}
+
+impl BodyError {
+    fn into_napi(self) -> Error {
+        match self {
+            BodyError::Transport(e) => Error::new(
+                Status::GenericFailure,
+                format!(
+                    "[{}] failed to read response body: {e}",
+                    classify_request_error(&e)
+                ),
+            ),
+            // Matches the class wreq's own decoder failures get
+            // (`is_decode()` -> DECODE), so JS sees one error code for "the
+            // body did not decode" no matter which decoder produced it.
+            BodyError::Decode(e) => Error::new(
+                Status::GenericFailure,
+                format!("[DECODE] failed to read response body: error decoding response body: {e}"),
+            ),
+        }
+    }
+}
+
+/// Reverses the `io::Error` boxing that `StreamReader` requires, so a transport
+/// failure that happens to travel through the decoder keeps its original
+/// classification instead of being reported as a decode error.
+fn unwrap_body_error(e: io::Error) -> BodyError {
+    if e.get_ref()
+        .is_some_and(|inner| inner.downcast_ref::<wreq::Error>().is_some())
+    {
+        let kind = e.kind();
+        return match e
+            .into_inner()
+            .and_then(|inner| inner.downcast::<wreq::Error>().ok())
+        {
+            Some(transport) => BodyError::Transport(*transport),
+            // The check above already said this is a `wreq::Error`, so this arm
+            // is dead -- but a panic here would abort the Node process, and the
+            // kind alone is enough to keep the error honest.
+            None => BodyError::Decode(kind.into()),
+        };
+    }
+    BodyError::Decode(e)
+}
+
+/// Whether this response's body is a lone `deflate` payload that we decode
+/// ourselves; if so, the headers that describe the *encoded* body are dropped.
+///
+/// wreq strips `Content-Encoding`/`Content-Length` whenever it decodes, and JS
+/// must not be able to tell which decoder ran: leaving `content-encoding:
+/// deflate` on an already-decoded body would make the deflate path the one
+/// oddball among gzip/br/zstd.
+///
+/// Deliberately narrow. Only a single `deflate` token is claimed -- a list like
+/// `gzip, deflate` is left to wreq (which fails it, exactly as before) rather
+/// than guessed at, since decoding a chain in the wrong order is worse than not
+/// decoding it.
+fn take_deflate_decoding(response: &mut wreq::Response) -> bool {
+    let mut values = response.headers().get_all(CONTENT_ENCODING).iter();
+    let is_deflate = match (values.next(), values.next()) {
+        (Some(value), None) => value
+            .to_str()
+            .is_ok_and(|value| value.trim().eq_ignore_ascii_case("deflate")),
+        _ => false,
+    };
+
+    if is_deflate {
+        let headers = response.headers_mut();
+        headers.remove(CONTENT_ENCODING);
+        headers.remove(CONTENT_LENGTH);
+    }
+    is_deflate
+}
+
+/// Cap on a single decoded chunk. Without it one `read()` of a 1000x-ratio body
+/// could hand JS an unbounded buffer, and `maxResponseBytes` -- which is checked
+/// per chunk -- would only notice after the allocation.
+const DECODED_CHUNK_BYTES: usize = 64 * 1024;
+
+/// The response body as chunks, decoding `deflate` ourselves when
+/// `take_deflate_decoding` claimed it.
+fn body_stream(response: wreq::Response, decode_deflate: bool) -> BoxBodyStream {
+    if decode_deflate {
+        deflate_body_stream(response.bytes_stream())
+    } else {
+        Box::pin(
+            response
+                .bytes_stream()
+                .map(|r| r.map_err(BodyError::Transport)),
+        )
+    }
+}
+
+/// Decodes `Content-Encoding: deflate` accepting *both* readings of the token.
+///
+/// RFC 2616 defined `deflate` as a zlib-wrapped stream (RFC 1950), but a large
+/// number of origins -- PHP/Apache with `zlib.output_compression` above all --
+/// send a bare DEFLATE stream (RFC 1951) under the same name. Browsers accept
+/// either, so an impersonating client has to match their *tolerance* and not
+/// just their header string: a Chrome fingerprint that advertises `deflate` and
+/// then fails on what Chrome renders fine is a fingerprint gap, not a strict
+/// reading of the spec.
+///
+/// The two are told apart by the zlib header rather than by trying zlib and
+/// retrying on error: sniffing needs 2 bytes and no rewind, which is what makes
+/// this work on a streamed body. CMF/FLG is a valid zlib header when the
+/// compression method is 8 and the 16-bit big-endian value is a multiple of 31.
+/// A raw stream can in principle open with two bytes that satisfy that check
+/// (it would have to start with a stored block whose length happens to line up);
+/// browsers use the same heuristic and live with the same residue.
+fn deflate_body_stream(
+    raw: impl Stream<Item = wreq::Result<Bytes>> + Send + 'static,
+) -> BoxBodyStream {
+    Box::pin(
+        futures_util::stream::once(async move {
+            let mut raw = Box::pin(raw);
+            let mut prefix = BytesMut::new();
+            let mut pending_err = None;
+            while prefix.len() < 2 {
+                match raw.next().await {
+                    Some(Ok(chunk)) => prefix.extend_from_slice(&chunk),
+                    Some(Err(e)) => {
+                        pending_err = Some(e);
+                        break;
+                    }
+                    None => break,
+                }
+            }
+
+            // An empty body (204/304/HEAD, or a `Content-Encoding` header on a
+            // response that carries nothing) is not a truncated deflate stream.
+            // Handing it to the decoder would turn a legal response into
+            // "unexpected end of file".
+            if prefix.is_empty() {
+                let stream: BoxBodyStream = match pending_err {
+                    Some(e) => Box::pin(futures_util::stream::once(async move {
+                        Err(BodyError::Transport(e))
+                    })),
+                    None => Box::pin(futures_util::stream::empty()),
+                };
+                return stream;
+            }
+
+            let zlib_wrapped = prefix.len() >= 2
+                && prefix[0] & 0x0f == 8
+                && (u16::from(prefix[0]) << 8 | u16::from(prefix[1])) % 31 == 0;
+
+            // `StreamReader` needs `io::Error`, so a transport failure is boxed
+            // into one here and recovered by `unwrap_body_error` on the way out.
+            let head = futures_util::stream::iter([Ok(prefix.freeze())]);
+            let tail: Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send>> = match pending_err {
+                Some(e) => Box::pin(futures_util::stream::once(async move {
+                    Err(io::Error::other(e))
+                })),
+                None => Box::pin(raw.map(|r| r.map_err(io::Error::other))),
+            };
+            let reader = StreamReader::new(head.chain(tail));
+
+            let decoded: Pin<Box<dyn AsyncRead + Send>> = if zlib_wrapped {
+                Box::pin(ZlibDecoder::new(reader))
+            } else {
+                Box::pin(DeflateDecoder::new(reader))
+            };
+            Box::pin(
+                ReaderStream::with_capacity(decoded, DECODED_CHUNK_BYTES)
+                    .map(|r| r.map_err(unwrap_body_error)),
+            )
+        })
+        .flatten(),
+    )
+}
+
 #[napi]
 pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchResponse> {
     let options = options.unwrap_or_default();
@@ -1147,7 +1344,8 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
         .max_response_bytes
         .unwrap_or(DEFAULT_MAX_RESPONSE_BYTES) as usize;
 
-    let (response, requested_url) = send_request(url, options).await?;
+    let (mut response, requested_url) = send_request(url, options).await?;
+    let decode_deflate = take_deflate_decoding(&mut response);
     let (status, status_text, ok, final_url, redirected, headers) =
         response_meta(&response, &requested_url);
 
@@ -1157,26 +1355,20 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
     // able to make us allocate 10 GB up front. Clamp to what we would actually
     // accept anyway, and to a ceiling that keeps a lying header cheap -- honest
     // bodies past the ceiling just grow the Vec as before. `content_length()`
-    // is None for chunked and for decompressed (gzip/br) bodies, which simply
-    // falls back to starting empty.
+    // is None for chunked and for bodies wreq decompressed (gzip/br/zstd), and
+    // for the deflate bodies decoded here it is the *encoded* length -- a lower
+    // bound on what we will end up holding, which is still a fine hint. Both
+    // cases just fall back to growing the Vec.
     const PREALLOC_CEILING: u64 = 1024 * 1024;
     let prealloc = response
         .content_length()
         .map(|cl| cl.min(max_response_bytes as u64).min(PREALLOC_CEILING) as usize)
         .unwrap_or(0);
 
-    let mut stream = response.bytes_stream();
+    let mut stream = body_stream(response, decode_deflate);
     let mut body = Vec::with_capacity(prealloc);
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| {
-            Error::new(
-                Status::GenericFailure,
-                format!(
-                    "[{}] failed to read response body: {e}",
-                    classify_request_error(&e)
-                ),
-            )
-        })?;
+        let chunk = chunk.map_err(BodyError::into_napi)?;
         let remaining = max_response_bytes.saturating_sub(body.len());
         if chunk.len() > remaining {
             return Err(Error::new(
@@ -1200,7 +1392,7 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
     })
 }
 
-type BoxBodyStream = Pin<Box<dyn Stream<Item = wreq::Result<Bytes>> + Send>>;
+type BoxBodyStream = Pin<Box<dyn Stream<Item = std::result::Result<Bytes, BodyError>> + Send>>;
 
 /// A response body that has **not** been read into memory. Chunks are pulled one
 /// at a time, so peak RSS tracks the chunk size (tens of KiB) rather than the
@@ -1251,13 +1443,7 @@ impl FetchBody {
             }
             Some(Err(e)) => {
                 *guard = None;
-                Err(Error::new(
-                    Status::GenericFailure,
-                    format!(
-                        "[{}] failed to read response body: {e}",
-                        classify_request_error(&e)
-                    ),
-                ))
+                Err(e.into_napi())
             }
             Some(Ok(chunk)) => {
                 if let Some(max) = self.max_bytes {
@@ -1363,7 +1549,8 @@ pub async fn fetch_streaming(
     // cannot be folded into "unlimited".
     let max_bytes = options.max_response_bytes.map(u64::from);
 
-    let (response, requested_url) = send_request(url, options).await?;
+    let (mut response, requested_url) = send_request(url, options).await?;
+    let decode_deflate = take_deflate_decoding(&mut response);
     let (status, status_text, ok, final_url, redirected, headers) =
         response_meta(&response, &requested_url);
 
@@ -1375,8 +1562,9 @@ pub async fn fetch_streaming(
         redirected,
         headers,
         body: Mutex::new(Some(FetchBody {
-            stream: Arc::new(tokio::sync::Mutex::new(Some(Box::pin(
-                response.bytes_stream(),
+            stream: Arc::new(tokio::sync::Mutex::new(Some(body_stream(
+                response,
+                decode_deflate,
             )))),
             cancel: CancellationToken::new(),
             read_so_far: Arc::new(AtomicU64::new(0)),

@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`Content-Encoding: deflate` now accepts raw DEFLATE (RFC 1951), not just
+  zlib-wrapped (RFC 1950).** wreq (via tower-http) decodes `deflate` strictly as
+  a zlib stream, so an origin that sends a bare DEFLATE stream under that token
+  — the PHP/Apache `zlib.output_compression` behaviour, which is common enough
+  that browsers all sniff for it — failed the whole request with
+  `[DECODE] ... deflate decompression error` before a single byte reached the
+  caller. `deflate` decoding moved out of wreq (`ClientBuilder::no_deflate()`)
+  into `deflate_body_stream`, which picks the decoder from the first two bytes:
+  zlib when CMF/FLG says method 8 and the 16-bit value is a multiple of 31, raw
+  otherwise. Sniffing rather than try-zlib-then-retry is what keeps this working
+  on a streamed body — there is no rewind. Both the buffered and `stream: true`
+  paths go through it, `maxResponseBytes` still counts decoded bytes, and
+  `Content-Encoding`/`Content-Length` are stripped exactly as wreq does for
+  gzip/br/zstd, so nothing downstream can tell which decoder ran. Only a lone
+  `deflate` token is claimed; a chain like `deflate, gzip` is left alone.
+
+  This is a fingerprint fix as much as a compatibility one: Chrome advertises
+  `deflate` *and* accepts either flavour, so impersonating Chrome means matching
+  its tolerance, not just its header string.
+
+### Changed
+
+- **`Accept-Encoding` is now the impersonated browser's own header** rather than
+  one synthesised from enabled Cargo features. wreq-util only emits a profile's
+  `Accept-Encoding` under its `emulation-compression` feature, which was off, so
+  every profile — Chrome, Firefox, Safari, okhttp alike — sent tower-http's
+  fallback `gzip,deflate,br`: no spaces, no `zstd`, and appended last instead of
+  sitting in the profile's own header order. Three separate tells for anything
+  fingerprinting headers. Now `chrome_147` sends `gzip, deflate, br, zstd`,
+  `chrome116` (curl-impersonate preset) sends `gzip, deflate, br`, and
+  `okhttp_5` sends `gzip`, each in its profile's position.
+
+  `zstd` decoding is enabled alongside it, since the modern profiles now
+  advertise `zstd` and advertising an encoding you cannot decode is how you get
+  a body that only fails in production. No new native dependency: zstd-sys was
+  already built by wreq-util's default features.
+
 ## [1.2.0] - 2026-07-28
 
 ### Added

@@ -16,8 +16,22 @@ crate-type = ["cdylib"]
 # offers Node-API 10 and loads a napi9 addon fine.
 napi = { version = "3", default-features = false, features = ["napi9", "async", "tokio_rt", "serde-json"] }
 napi-derive = "3"
-wreq = { version = "6.0.0-rc.29", features = ["json", "cookies", "gzip", "brotli", "deflate", "charset", "socks", "stream"] }
-wreq-util = { version = "3.0.0-rc.14", features = ["emulation-serde"] }
+# `zstd` is not optional despite nothing here calling it directly: with
+# wreq-util's `emulation-compression` on (below), a modern Chrome/Firefox/Edge
+# profile advertises `zstd` because the real browser does, and advertising an
+# encoding we cannot decode is how you get a body that only fails in production.
+# It costs no new native dependency -- wreq-util's default `emulation` feature
+# already builds zstd-sys.
+wreq = { version = "6.0.0-rc.29", features = ["json", "cookies", "gzip", "brotli", "deflate", "zstd", "charset", "socks", "stream"] }
+# `emulation-compression` is what makes each profile send its *own*
+# `Accept-Encoding` (Chrome's "gzip, deflate, br, zstd", okhttp's bare "gzip",
+# ...) in its own position in the header order. Without it wreq-util omits the
+# header entirely and tower-http appends a synthesised one derived from whichever
+# wreq features happen to be enabled -- "gzip,deflate,br", no spaces, last in the
+# list. That is a fingerprint tell no `impersonate` value can hide, and it also
+# couples the wire header to our decoder feature flags, which is exactly the
+# coupling `no_deflate()` in `build_client` must not have.
+wreq-util = { version = "3.0.0-rc.14", features = ["emulation-serde", "emulation-compression"] }
 serde_json = "1"
 futures-util = "0.3"
 # Streaming response bodies (see docs/streaming-design.md). `bytes` and `tokio`
@@ -26,7 +40,13 @@ futures-util = "0.3"
 # fails with E0433.
 bytes = "1"
 tokio = { version = "1", features = ["sync", "macros"] }
-tokio-util = "0.7"
+tokio-util = { version = "0.7", features = ["io"] }
+# `Content-Encoding: deflate` is decoded here rather than by wreq: wreq (via
+# tower-http) only accepts the zlib-wrapped form (RFC 1950), while a large slice
+# of the web sends raw DEFLATE (RFC 1951) under that same token and browsers
+# accept both. See `deflate_body_stream`. Same version tower-http already pulls
+# in, so this adds no second copy of the codec.
+async-compression = { version = "0.4.42", default-features = false, features = ["tokio", "zlib", "deflate"] }
 
 [build-dependencies]
 napi-build = "2"

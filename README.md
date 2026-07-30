@@ -548,6 +548,7 @@ JS Application
 2. **Session Cookie Jars**: Cookie storage is keyed by `session` ID alone across client instances, allowing cookie persistence even when changing impersonation settings or using `resolve`.
 3. **Random Impersonation**: `random` / `weighted_random` profiles pin their selected profile to the client cache key on first invocation, maintaining consistent fingerprints throughout a session.
 4. **Resolution Bypassing**: Requests with `resolve` build single-use clients to prevent host IP overrides from polluting shared connection pools.
+5. **Compression**: `Accept-Encoding` is the impersonated profile's own header, verbatim and in its own position (`chrome_147` → `gzip, deflate, br, zstd`; `okhttp_5` → `gzip`) — not a value derived from which decoders are compiled in. Responses are decoded transparently and the encoding headers are stripped. `deflate` is accepted in **both** readings of the token: zlib-wrapped (RFC 1950) and raw (RFC 1951, what PHP/Apache `zlib.output_compression` sends), picked by sniffing the first two bytes. Browsers accept either, so impersonating one means matching that tolerance rather than the stricter spec.
 
 ### Empirically Verified Behavior
 
