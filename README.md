@@ -15,7 +15,7 @@ It follows the WHATWG `fetch(input, init)` shape: `input` can be a URL string, a
 
 Response bodies are **buffered by default** and capped at 32 MiB, which keeps error handling simple but makes large downloads impossible. Pass [`stream: true`](#8-streaming-a-large-download-to-disk) to get a real `ReadableStream` instead: peak memory then tracks the chunk size rather than the response size — **~206 MiB of RSS for a 2 GiB download, versus ~4.1 GiB buffered.**
 
-It is still **not** a full drop-in replacement: `FormData`/multipart, streaming _request_ bodies, and `AbortSignal` aren't wired up yet. See [Known limitations](#known-limitations), and [`docs/fetch-compatibility.md`](./docs/fetch-compatibility.md) for the precise compatibility matrix and a migration guide from native `fetch`/`undici`.
+It is still **not** a full drop-in replacement: `FormData`/multipart and streaming _request_ bodies aren't wired up yet. See [Known limitations](#known-limitations), and [`docs/fetch-compatibility.md`](./docs/fetch-compatibility.md) for the precise compatibility matrix and a migration guide from native `fetch`/`undici`.
 
 ---
 
@@ -30,7 +30,7 @@ It is still **not** a full drop-in replacement: `FormData`/multipart, streaming 
   - [2. Picking a curl-impersonate Preset](#2-picking-a-curl-impersonate-preset-and-inspecting-what-it-resolves-to)
   - [3. Multi-Request Session with Persistent Cookies](#3-multi-request-session-with-persistent-cookies-login-flow)
   - [4. Rotating Proxy per Request](#4-rotating-proxy-per-request)
-  - [5. Request Timeouts](#5-timeout)
+  - [5. Timeout and Cancellation](#5-timeout-and-cancellation)
   - [6. Low-Level TLS Override (`tlsOptions`)](#6-low-level-tls-override-escape-hatch-tlsoptions)
   - [7. SSRF-Safe DNS Pinning and Manual Redirects](#7-ssrf-safe-dns-pinning-and-manual-redirects)
   - [8. Streaming a Large Download to Disk](#8-streaming-a-large-download-to-disk)
@@ -267,7 +267,7 @@ for (const [i, url] of ['https://a.example', 'https://b.example', 'https://c.exa
 }
 ```
 
-### 5. Timeout
+### 5. Timeout and Cancellation
 
 ```js
 const { fetch } = require('@trishchuk/fetch')
@@ -276,6 +276,26 @@ try {
   const res = await fetch('https://example.com/slow', { timeoutMs: 5000 })
 } catch (err) {
   console.error('request timed out or failed:', err.message)
+}
+```
+
+`AbortSignal` is supported with WHATWG semantics: the rejection (or, mid-stream,
+the body error) is the signal's own `reason`, identity-preserved. Compose
+multiple sources with the standard primitives instead of a custom API:
+
+```js
+const controller = new AbortController() // e.g. wired to user action / shutdown
+
+try {
+  const res = await fetch('https://example.com/slow', {
+    // First to fire wins: user abort, a 5 s deadline, or `timeoutMs` below.
+    signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
+  })
+} catch (err) {
+  // controller.abort(reason)  -> rejects with that exact `reason`
+  // AbortSignal.timeout()     -> DOMException named "TimeoutError"
+  // timeoutMs                 -> FetchError with code "TIMEOUT"
+  console.error('aborted or failed:', err)
 }
 ```
 
@@ -414,6 +434,7 @@ Primary entry point. `input` can be a URL string, `URL`, or `Request`-like objec
 | `redirect`         | `"follow" \| "manual" \| "error"`                                                   | `"follow"`            | WHATWG redirect policy.                                                                                                                                                                                   |
 | `session`          | `string`                                                                            | `undefined`           | Opaque session ID for cookie jar and client caching.                                                                                                                                                      |
 | `timeoutMs`        | `number`                                                                            | `undefined`           | Request timeout in milliseconds.                                                                                                                                                                          |
+| `signal`           | `AbortSignal \| null`                                                               | `undefined`           | WHATWG abort. Rejects (or errors a streamed body) with the signal's own `reason`. Compose sources with `AbortSignal.any()` / `AbortSignal.timeout()`; `null` disables a `Request`-inherited signal.       |
 | `maxResponseBytes` | `number`                                                                            | `33,554,432` (32 MiB) | Maximum response body buffer size in bytes. With `stream: true` it is **unset by default**; an explicit value becomes a cumulative cap, and an explicit `0` rejects the first non-empty chunk.            |
 | `stream`           | `boolean`                                                                           | `false`               | Do not buffer the body. Returns a [`StreamingFetchResponse`](#streamingfetchresponse) whose `body` is a `ReadableStream`. Changes error timing — see [use case 8](#8-streaming-a-large-download-to-disk). |
 | `tlsMinVersion`    | `string`                                                                            | profile default       | Minimum TLS version (`"1.0"`, `"1.1"`, `"1.2"`, `"1.3"`).                                                                                                                                                 |
@@ -517,7 +538,6 @@ Returns an array of preset descriptions for all 19 curl-impersonate profile name
 - **No Streaming Request Bodies**: Upload bodies are still buffered. A streaming request body would need a known length, because HTTP/1.1 falls back to `Transfer-Encoding: chunked` without one and browsers essentially never chunk uploads — an observable fingerprint difference. Deferred rather than shipped half-right.
 - **No `clone()` on a Streamed Response**: It throws. `clone()` means `tee()`, which buffers the slower branch without bound. Use `response.body.tee()` explicitly.
 - **No `FormData`/Multipart Request Bodies**: `FormData` throws on input. Generic multipart formatting diverges from browser-specific boundary and casing patterns.
-- **No `AbortSignal` Support**: Passing `signal` has no effect. Use `timeoutMs` for deadline enforcement.
 - **`tlsOptions` Diverges Fingerprints**: Overriding ClientHello options changes the signature relative to authentic browser traffic.
 - **No Direct Cookie Manipulation**: Cookies are managed transparently within a `session`; there is no API to read or write individual cookie strings directly.
 - **Header Repetition Restrictions**: Duplicate request header keys are combined into comma-separated values per WHATWG rules.

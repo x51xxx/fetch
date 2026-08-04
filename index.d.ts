@@ -22,12 +22,14 @@ export type HeadersInit =
  */
 export type BodyInit = string | Uint8Array | ArrayBuffer | ArrayBufferView | URLSearchParams | Blob
 
-/** A `Request`-like input: the wrapper reads `url`/`method`/`headers` and buffers the body. */
+/** A `Request`-like input: the wrapper reads `url`/`method`/`headers`/`signal` and buffers the body. */
 export interface RequestLike {
   url: string
   method?: string
   headers?: HeadersInit
   bodyUsed?: boolean
+  /** Inherited unless `init.signal` is present (`null` there disables it). */
+  signal?: AbortSignal
   arrayBuffer?(): Promise<ArrayBuffer>
 }
 
@@ -67,6 +69,21 @@ export interface FetchInit {
   redirect?: 'follow' | 'manual' | 'error'
   /** Opaque session id; the cookie jar is keyed by it alone and shared by every call using it. */
   session?: string
+  /**
+   * WHATWG abort semantics. When the signal aborts, `fetch()` rejects — and a
+   * streamed body errors — with the signal's own `reason` (identity-preserved:
+   * `controller.abort(customError)` comes back as that exact object; an
+   * `AbortSignal.timeout()` yields its `TimeoutError` `DOMException`). Covers
+   * every phase: pre-flight, connect/TLS/headers, and each body chunk.
+   *
+   * Compose multiple sources with standard primitives — `AbortSignal.any()`,
+   * `AbortSignal.timeout()` — rather than expecting a signals array. Note
+   * `timeoutMs` is independent: it rejects with `FetchError` `code: 'TIMEOUT'`,
+   * while a signal rejects with its reason; when both are set the first one to
+   * fire wins. `null` explicitly disables a signal inherited from a `Request`
+   * input.
+   */
+  signal?: AbortSignal | null
   /** Overall request timeout in milliseconds. */
   timeoutMs?: number
   /**
@@ -213,7 +230,8 @@ export declare class StreamingFetchResponse {
 
 /**
  * WHATWG-shaped fetch with TLS/HTTP2 fingerprint control. Rejects with a
- * {@link FetchError} (carrying a `code`) on transport failure.
+ * {@link FetchError} (carrying a `code`) on transport failure, and with the
+ * signal's own `reason` when an `init.signal` aborts.
  *
  * With `stream: true` returns a {@link StreamingFetchResponse} instead, whose
  * body is a `ReadableStream`. The TLS/HTTP2 fingerprint is identical either way

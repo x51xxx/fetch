@@ -6,10 +6,11 @@
 // untouched, and closes the ergonomic gaps that made the raw native `fetch`
 // awkward to use as a `fetch`: WHATWG-shaped `(input, init)` call signature,
 // `URL`/`Request`/`Headers` inputs, binary / `URLSearchParams` / `Blob` /
-// typed-array request bodies, and a Response with `.bytes()`/`.blob()` plus
-// WHATWG `bodyUsed` semantics. It deliberately does NOT try to be undici:
-// FormData/multipart and streaming (both directions) and AbortSignal are not
-// handled here — see the README "Known limitations".
+// typed-array request bodies, `AbortSignal` (WHATWG semantics: rejection with
+// the signal's own `reason`, an errored — not closed — body stream), and a
+// Response with `.bytes()`/`.blob()` plus WHATWG `bodyUsed` semantics. It
+// deliberately does NOT try to be undici: FormData/multipart and streaming
+// request bodies are not handled here — see the README "Known limitations".
 
 const binding = require('./binding.js')
 
@@ -68,6 +69,28 @@ const NATIVE_ERROR_CODES = new Set([
 
 const TAGGED_ERROR = /^\[([A-Z_]+)\] ([\s\S]*)$/
 
+// The value an abort rejects with. WHATWG requires the signal's own `reason`,
+// identity-preserved (a caller's `controller.abort(customError)` must come
+// back as that exact object, and the reason may legitimately be a string or
+// even `null`) — never a wrapper and never a new error with `cause`. A real
+// `AbortSignal` always carries a reason once aborted, so the DOMException
+// fallback only guards `abort(undefined)`-style edge cases.
+function abortReason(signal) {
+  return signal.reason !== undefined
+    ? signal.reason
+    : new DOMException('This operation was aborted', 'AbortError')
+}
+
+// Safety net for a streamed response that is dropped without ever being read:
+// its abort listener holds only a WeakRef to the response, and this registry
+// removes the listener itself once the response is collected, so a long-lived
+// signal (e.g. a process-wide shutdown controller) does not accumulate dead
+// listeners. Deterministic removal happens on every terminal path (EOF, error,
+// abort, cancel, null body) — this covers only abandonment.
+const abortRegistry = new FinalizationRegistry(({ signal, listener }) => {
+  signal.removeEventListener('abort', listener)
+})
+
 /**
  * Error thrown when a request fails at the transport layer (connection, proxy,
  * TLS, timeout, body). `code` is one of {@link NATIVE_ERROR_CODES}; the raw
@@ -86,11 +109,23 @@ class FetchError extends Error {
 // `FetchError` with that code lifted out and the tag stripped from the message.
 // Anything without a recognized tag (e.g. an `InvalidArg` from bad options) is
 // passed through untouched so its own `.code` and type survive.
-function enrichNativeError(err) {
+//
+// `[ABORTED]` is a private marker, not a public code: it means the native
+// transfer was torn down by `AbortHandle.abort()`, and per WHATWG the caller
+// must see the signal's own `reason` — so it is swapped out here rather than
+// becoming a `FetchError`.
+function enrichNativeError(err, signal) {
   if (err instanceof Error && typeof err.message === 'string') {
     const match = TAGGED_ERROR.exec(err.message)
-    if (match && NATIVE_ERROR_CODES.has(match[1])) {
-      return new FetchError(match[2], match[1], { cause: err })
+    if (match) {
+      if (match[1] === 'ABORTED') {
+        return signal
+          ? abortReason(signal)
+          : new DOMException('This operation was aborted', 'AbortError')
+      }
+      if (NATIVE_ERROR_CODES.has(match[1])) {
+        return new FetchError(match[2], match[1], { cause: err })
+      }
     }
   }
   return err
@@ -224,6 +259,19 @@ async function fetch(input, init) {
     url = String(input)
   }
 
+  // WebIDL member semantics: an explicitly-`undefined` `init.signal` counts as
+  // absent (fall back to the Request's own signal), while an explicit `null`
+  // disables an inherited signal. Anything present must be a real AbortSignal —
+  // undici brand-checks too, and silently ignoring a mistyped signal would turn
+  // "abort works" into "abort never fires".
+  let signal = init.signal !== undefined ? init.signal : requestObj ? requestObj.signal : undefined
+  if (signal != null && !(signal instanceof AbortSignal)) {
+    throw new TypeError("Failed to execute 'fetch': member signal is not of type AbortSignal.")
+  }
+  if (signal == null) signal = undefined
+  // Already aborted: reject before any work, with the signal's exact reason.
+  if (signal && signal.aborted) throw abortReason(signal)
+
   const method = normalizeMethod(
     init.method != null ? init.method : requestObj && requestObj.method
   )
@@ -236,6 +284,10 @@ async function fetch(input, init) {
   let defaultContentType
   if ('body' in init) {
     const normalized = await normalizeBody(init.body)
+    // The `Blob.arrayBuffer()` inside normalization is not itself cancelable,
+    // so an abort landing during it is observed here, right after — delayed by
+    // an in-memory copy, not by any network wait.
+    if (signal && signal.aborted) throw abortReason(signal)
     bodyValue = normalized.body
     defaultContentType = normalized.contentType
   } else if (
@@ -257,6 +309,7 @@ async function fetch(input, init) {
     }
     // A `Request` carried a body (its `.body` is a stream) — buffer it.
     const buffered = await requestObj.arrayBuffer()
+    if (signal && signal.aborted) throw abortReason(signal)
     if (buffered && buffered.byteLength > 0) bodyValue = new Uint8Array(buffered)
   }
 
@@ -283,6 +336,19 @@ async function fetch(input, init) {
     warnResolveIgnored()
   }
 
+  // Bridge the signal to the native layer: one `AbortHandle` per request whose
+  // token the Rust side races against every await (connect/TLS/headers, and
+  // each body chunk). Attached as late as possible — everything before this
+  // point is covered by the plain `signal.aborted` checks above.
+  let handle
+  let onAbort
+  if (signal) {
+    handle = new binding.AbortHandle()
+    const h = handle
+    onAbort = () => h.abort()
+    signal.addEventListener('abort', onAbort, { once: true })
+  }
+
   if (init.stream === true) {
     // `maxResponseBytes` is forwarded untouched. Omitted means no cap on this
     // path (the native side reads `None` as unlimited), and an explicit 0 stays
@@ -290,18 +356,35 @@ async function fetch(input, init) {
     // it must not be quietly promoted to "unlimited".
     let nativeStream
     try {
-      nativeStream = await nativeFetchStreaming(url, options)
+      nativeStream = await nativeFetchStreaming(url, options, handle)
     } catch (err) {
-      throw enrichNativeError(err)
+      throw enrichNativeError(err, signal)
+    } finally {
+      // This listener only covered the native call; the response installs its
+      // own below, because on the streaming path the signal keeps governing
+      // the body long after `fetch()` has resolved.
+      if (signal) signal.removeEventListener('abort', onAbort)
     }
-    return new StreamingFetchResponse(nativeStream, method)
+    if (signal && signal.aborted) {
+      // The abort raced the headers and lost. WHATWG still rejects — the
+      // caller aborted before `fetch()` settled. Release the connection first.
+      nativeStream.takeBody()?.cancel()
+      throw abortReason(signal)
+    }
+    // No await between the `aborted` check above and the constructor attaching
+    // the response's own listener, so no abort can fall between the two.
+    return new StreamingFetchResponse(nativeStream, method, signal ? { signal, handle } : undefined)
   }
 
   let native
   try {
-    native = await nativeFetch(url, options)
+    native = await nativeFetch(url, options, handle)
   } catch (err) {
-    throw enrichNativeError(err)
+    throw enrichNativeError(err, signal)
+  } finally {
+    // Buffered path: the transfer is fully over (body and all) once the native
+    // promise settles, so the listener's job ends here either way.
+    if (signal) signal.removeEventListener('abort', onAbort)
   }
   return new FetchResponse(native)
 }
@@ -444,10 +527,69 @@ class StreamingFetchResponse {
   #taken = false
   #nativeBody = null
   #method
+  // AbortSignal wiring (all unset when the request carried no signal).
+  #signal
+  #handle
+  #abortListener
+  #aborted = false
+  #abortReason
+  #controller = null // the live ReadableStream controller, for erroring on abort
+  #settled = false // terminal: the signal can no longer affect this response
 
-  constructor(native, method) {
+  constructor(native, method, abortCtx) {
     this.#native = native
     this.#method = method
+    if (abortCtx) {
+      this.#signal = abortCtx.signal
+      this.#handle = abortCtx.handle
+      // The listener must not keep an abandoned response (and through it the
+      // native body and its connection) alive for as long as the caller's
+      // signal lives — hence the WeakRef, with `abortRegistry` reaping the
+      // listener itself if the response is collected unread.
+      const weakSelf = new WeakRef(this)
+      this.#abortListener = () => {
+        weakSelf.deref()?.#onAbort()
+      }
+      this.#signal.addEventListener('abort', this.#abortListener, { once: true })
+      abortRegistry.register(this, { signal: this.#signal, listener: this.#abortListener }, this)
+    }
+  }
+
+  // Terminal cleanup: after EOF, a body error, an abort, a cancel, or a
+  // null-body response, the signal has nothing left to govern. Removing the
+  // listener here (not just relying on `{ once: true }`) is what keeps a
+  // never-aborted long-lived signal from pinning dead closures.
+  #settle() {
+    if (this.#settled) return
+    this.#settled = true
+    if (this.#signal) {
+      this.#signal.removeEventListener('abort', this.#abortListener)
+      abortRegistry.unregister(this)
+    }
+  }
+
+  #onAbort() {
+    if (this.#settled) return
+    this.#aborted = true
+    this.#abortReason = abortReason(this.#signal)
+    // Unpark an in-flight native `read()` — it observes the fired token and
+    // fails with the private `[ABORTED]` marker.
+    this.#handle.abort()
+    // WHATWG: an aborted response body *errors* with the signal's reason; it
+    // must not close cleanly. Erroring an already-errored controller is a
+    // spec-level no-op, so the race with a failing `pull()` is harmless.
+    if (this.#controller) {
+      this.#controller.error(this.#abortReason)
+    }
+    // With no read parked, nothing native is watching the token — drop the
+    // stream directly so the connection is released now, not at finalization.
+    if (this.#nativeBody) {
+      this.#nativeBody.cancel()
+    } else if (!this.#taken) {
+      this.#taken = true
+      this.#native.takeBody()?.cancel()
+    }
+    this.#settle()
   }
 
   get status() {
@@ -516,8 +658,23 @@ class StreamingFetchResponse {
         this.#taken = true
         this.#native.takeBody()?.cancel()
       }
+      // A body that never existed cannot be aborted — release the listener.
+      this.#settle()
       this.#body = null
       return null
+    }
+
+    if (this.#aborted) {
+      // Aborted before anyone touched the body. WHATWG: the response body is
+      // errored with the abort reason — not `null`, and not an empty stream.
+      // The native side was already released in #onAbort().
+      const reason = this.#abortReason
+      this.#body = new ReadableStream({
+        start(controller) {
+          controller.error(reason)
+        },
+      })
+      return this.#body
     }
 
     const nativeBody = this.#taken ? null : this.#native.takeBody()
@@ -533,11 +690,17 @@ class StreamingFetchResponse {
     // cancellation matters most.
     this.#nativeBody = nativeBody
 
+    const self = this
     const markUsed = () => {
       this.#bodyUsed = true
     }
     this.#body = new ReadableStream(
       {
+        start(controller) {
+          // Held on the response so #onAbort() can error the stream with the
+          // signal's reason even while a reader has it locked.
+          self.#controller = controller
+        },
         // Pull-based: exactly one native read per `pull`, so the consumer
         // governs how far ahead we read. This is what makes backpressure reach
         // all the way to the TCP window.
@@ -547,10 +710,22 @@ class StreamingFetchResponse {
           try {
             chunk = await nativeBody.read()
           } catch (err) {
-            controller.error(enrichNativeError(err))
+            self.#settle()
+            // On abort the controller was already errored with the signal's
+            // exact reason; `error()` on a non-readable stream is a no-op, so
+            // this cannot clobber it with the translated native error.
+            controller.error(
+              self.#aborted ? self.#abortReason : enrichNativeError(err, self.#signal)
+            )
+            return
+          }
+          if (self.#aborted) {
+            // The abort landed between the read settling and this microtask:
+            // the controller is already errored, and `close()` would throw.
             return
           }
           if (chunk == null) {
+            self.#settle()
             controller.close()
             return
           }
@@ -558,6 +733,8 @@ class StreamingFetchResponse {
         },
         cancel() {
           markUsed()
+          // Consumer cancellation, not an abort: clean teardown, no error.
+          self.#settle()
           nativeBody.cancel()
         },
       },
@@ -585,6 +762,10 @@ class StreamingFetchResponse {
    * body is dropped before the promise settles.
    */
   async cancel() {
+    // Already torn down and errored by the signal; there is nothing left to
+    // release, and "cancel after abort" must stay an abort, not soften into a
+    // clean close.
+    if (this.#aborted) return
     const body = this.body
     // Nothing to cancel, and nothing to disturb — `bodyUsed` stays false.
     if (body == null) return
@@ -596,6 +777,7 @@ class StreamingFetchResponse {
       // `read()` already parked on the socket.
       this.#nativeBody.cancel()
       this.#bodyUsed = true
+      this.#settle()
     }
   }
 

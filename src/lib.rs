@@ -1336,15 +1336,104 @@ fn deflate_body_stream(
     )
 }
 
+/// Marker for a transfer torn down via `AbortHandle.abort()` (the native half
+/// of `AbortSignal`). Deliberately NOT part of the public error-code set
+/// (`NATIVE_ERROR_CODES` / `FetchErrorCode`): the JS wrapper intercepts the
+/// tag and rethrows the signal's own `reason` in its place, preserving reason
+/// identity as WHATWG requires, so user code never observes this string.
+fn aborted_error() -> Error {
+    Error::new(
+        Status::GenericFailure,
+        "[ABORTED] request aborted".to_string(),
+    )
+}
+
+/// Native half of the `AbortSignal` bridge. JS constructs one per
+/// signal-carrying request, passes it as the trailing argument to
+/// `fetch`/`fetchStreaming`, and calls `abort()` from the signal's `abort`
+/// event. The flow is strictly one-way — JS fires the token, Rust observes it
+/// at its await points — so no ThreadsafeFunction (and none of its lifecycle
+/// or shutdown hazards) is involved.
+///
+/// This is a separate trailing argument rather than a `FetchOptions` field on
+/// purpose: `FetchOptions` is a plain data bag that crosses into a `'static`
+/// future, while this is a live object whose token must be cloned out on the
+/// JS thread before the future is spawned.
 #[napi]
-pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchResponse> {
+#[derive(Default)]
+pub struct AbortHandle {
+    token: CancellationToken,
+}
+
+#[napi]
+impl AbortHandle {
+    #[napi(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Fires the token. Idempotent and thread-safe; calling it after the
+    /// request already finished is a harmless no-op (a fired token nobody is
+    /// watching does nothing).
+    #[napi]
+    pub fn abort(&self) {
+        self.token.cancel();
+    }
+}
+
+/// Pulls the next body chunk, letting a fired abort token win the race. The
+/// `biased` ordering makes an already-fired token deterministic: if the caller
+/// aborted, the abort is reported even when a chunk is also ready.
+async fn next_chunk_or_abort(
+    stream: &mut BoxBodyStream,
+    abort: Option<&CancellationToken>,
+) -> Result<Option<std::result::Result<Bytes, BodyError>>> {
+    match abort {
+        Some(token) => tokio::select! {
+            biased;
+            _ = token.cancelled() => Err(aborted_error()),
+            item = stream.next() => Ok(item),
+        },
+        None => Ok(stream.next().await),
+    }
+}
+
+#[napi]
+pub fn fetch<'env>(
+    env: &'env Env,
+    url: String,
+    options: Option<FetchOptions>,
+    abort: Option<&AbortHandle>,
+) -> Result<PromiseRaw<'env, FetchResponse>> {
+    // Clone the token out of the JS-owned handle before spawning: the handle
+    // itself cannot cross into a `'static + Send` future, the token (an Arc
+    // internally) can.
+    let abort = abort.map(|handle| handle.token.clone());
+    env.spawn_future(fetch_impl(url, options, abort))
+}
+
+async fn fetch_impl(
+    url: String,
+    options: Option<FetchOptions>,
+    abort: Option<CancellationToken>,
+) -> Result<FetchResponse> {
     let options = options.unwrap_or_default();
     // Read before `options` is moved into `send_request`.
     let max_response_bytes = options
         .max_response_bytes
         .unwrap_or(DEFAULT_MAX_RESPONSE_BYTES) as usize;
 
-    let (mut response, requested_url) = send_request(url, options).await?;
+    // The select! covers the whole pre-body phase — DNS, connect, proxy, TLS,
+    // redirects, response headers — because dropping the `send_request` future
+    // is how hyper tears the in-flight request down.
+    let (mut response, requested_url) = match abort.as_ref() {
+        Some(token) => tokio::select! {
+            biased;
+            _ = token.cancelled() => return Err(aborted_error()),
+            res = send_request(url, options) => res?,
+        },
+        None => send_request(url, options).await?,
+    };
     let decode_deflate = take_deflate_decoding(&mut response);
     let (status, status_text, ok, final_url, redirected, headers) =
         response_meta(&response, &requested_url);
@@ -1367,7 +1456,10 @@ pub async fn fetch(url: String, options: Option<FetchOptions>) -> Result<FetchRe
 
     let mut stream = body_stream(response, decode_deflate);
     let mut body = Vec::with_capacity(prealloc);
-    while let Some(chunk) = stream.next().await {
+    // The abort token stays in the race here too: without it, an abort landing
+    // after headers would silently wait for the origin's next chunk (or the
+    // timeout) before taking effect.
+    while let Some(chunk) = next_chunk_or_abort(&mut stream, abort.as_ref()).await? {
         let chunk = chunk.map_err(BodyError::into_napi)?;
         let remaining = max_response_bytes.saturating_sub(body.len());
         if chunk.len() > remaining {
@@ -1405,6 +1497,13 @@ type BoxBodyStream = Pin<Box<dyn Stream<Item = std::result::Result<Bytes, BodyEr
 pub struct FetchBody {
     stream: Arc<tokio::sync::Mutex<Option<BoxBodyStream>>>,
     cancel: CancellationToken,
+    /// Request-level abort (the caller's `AbortSignal`), kept apart from
+    /// `cancel` because the two have opposite observable outcomes: an abort
+    /// makes `read()` fail with `[ABORTED]` (WHATWG: an aborted response body
+    /// errors), while a consumer cancel (`reader.cancel()`, `response.cancel()`)
+    /// remains a clean EOF. Folding them into one token would turn every
+    /// ordinary cancel into an AbortError.
+    abort: CancellationToken,
     read_so_far: Arc<AtomicU64>,
     max_bytes: Option<u64>,
 }
@@ -1417,16 +1516,28 @@ impl FetchBody {
     #[napi]
     pub async fn read(&self) -> Result<Option<Buffer>> {
         let mut guard = self.stream.lock().await;
+        // A fired abort outranks everything, including "already finished":
+        // WHATWG requires an aborted body to error, never to end cleanly, so
+        // read-after-abort must not fall through to the EOF path below.
+        if self.abort.is_cancelled() {
+            *guard = None;
+            return Err(aborted_error());
+        }
         let Some(stream) = guard.as_mut() else {
             return Ok(None);
         };
 
-        // `select!` rather than checking a flag between chunks: a cancel that
-        // arrives while we are parked waiting on the network must take effect
-        // immediately, otherwise `cancel()` would block until the origin decides
-        // to send more data (or the connection times out).
+        // `select!` rather than checking a flag between chunks: an abort or
+        // cancel that arrives while we are parked waiting on the network must
+        // take effect immediately, otherwise it would block until the origin
+        // decides to send more data (or the connection times out). `biased`
+        // keeps the priority deterministic: abort beats cancel beats data.
         let next = tokio::select! {
             biased;
+            _ = self.abort.cancelled() => {
+                *guard = None;
+                return Err(aborted_error());
+            }
             _ = self.cancel.cancelled() => {
                 *guard = None;
                 return Ok(None);
@@ -1537,9 +1648,22 @@ impl StreamingFetchResponse {
 /// is already resolved, so the same failure surfaces from `FetchBody::read`
 /// instead. That difference is why streaming is opt-in rather than the default.
 #[napi]
-pub async fn fetch_streaming(
+pub fn fetch_streaming<'env>(
+    env: &'env Env,
     url: String,
     options: Option<FetchOptions>,
+    abort: Option<&AbortHandle>,
+) -> Result<PromiseRaw<'env, StreamingFetchResponse>> {
+    // Same shape as `fetch`: clone the token on the JS thread, spawn a
+    // `'static` future.
+    let abort = abort.map(|handle| handle.token.clone());
+    env.spawn_future(fetch_streaming_impl(url, options, abort))
+}
+
+async fn fetch_streaming_impl(
+    url: String,
+    options: Option<FetchOptions>,
+    abort: Option<CancellationToken>,
 ) -> Result<StreamingFetchResponse> {
     let options = options.unwrap_or_default();
     // `None` means "omitted", which on this path means no cap -- streaming
@@ -1549,7 +1673,14 @@ pub async fn fetch_streaming(
     // cannot be folded into "unlimited".
     let max_bytes = options.max_response_bytes.map(u64::from);
 
-    let (mut response, requested_url) = send_request(url, options).await?;
+    let (mut response, requested_url) = match abort.as_ref() {
+        Some(token) => tokio::select! {
+            biased;
+            _ = token.cancelled() => return Err(aborted_error()),
+            res = send_request(url, options) => res?,
+        },
+        None => send_request(url, options).await?,
+    };
     let decode_deflate = take_deflate_decoding(&mut response);
     let (status, status_text, ok, final_url, redirected, headers) =
         response_meta(&response, &requested_url);
@@ -1567,6 +1698,9 @@ pub async fn fetch_streaming(
                 decode_deflate,
             )))),
             cancel: CancellationToken::new(),
+            // The same token `fetch()`'s select observed pre-headers: once the
+            // body is handed over, an abort surfaces from `read()` instead.
+            abort: abort.unwrap_or_default(),
             read_so_far: Arc::new(AtomicU64::new(0)),
             max_bytes,
         })),

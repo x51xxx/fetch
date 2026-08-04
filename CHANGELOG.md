@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`AbortSignal` support with full WHATWG semantics** (`init.signal`, also
+  inherited from a `Request` input; an explicit `null` disables inheritance).
+  The signal covers every phase of a request: pre-flight (an already-aborted
+  signal rejects before any work), connect/proxy/TLS/redirects/headers (the
+  native future is raced against a `tokio_util` `CancellationToken` and torn
+  down by drop), each chunk of a buffered body, and each `read()` of a streamed
+  one — an abort unparks a read that is waiting on the socket. The rejection
+  value is the signal's own `reason`, identity-preserved as the spec requires:
+  `controller.abort(customError)` comes back as that exact object, never
+  wrapped in a `FetchError`; on a streamed response after headers, the body
+  stream *errors* with that reason (WHATWG: never a clean close). Consumer
+  cancellation (`reader.cancel()`, `response.cancel()`) remains a clean close —
+  the native `FetchBody` keeps two separate tokens precisely so a cancel can
+  never be mistaken for an abort. Compose sources with the standard
+  `AbortSignal.any()` / `AbortSignal.timeout()` primitives; `timeoutMs` stays
+  independent (`FetchError` `code: 'TIMEOUT'` vs the signal's `TimeoutError`
+  `DOMException` — first to fire wins). Abort listeners are removed on every
+  terminal path (settled fetch, EOF, body error, cancel, null-body response),
+  so reusing one long-lived signal across many requests accumulates nothing; a
+  streamed response abandoned unread is covered by a `WeakRef` +
+  `FinalizationRegistry` safety net. Internally the bridge is one-way — JS
+  fires the token via a new native `AbortHandle`, Rust only observes it — so no
+  ThreadsafeFunction is involved.
+
 ## [1.2.1] - 2026-07-31
 
 ### Fixed

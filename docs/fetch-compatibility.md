@@ -28,7 +28,7 @@
 | `res.body` (`ReadableStream`)                                |       ✅        | ✅ `stream: true`  | Opt-in; `null` in buffered mode — [streaming](#streaming-response-bodies) |
 | `res.clone()`                                                |       ✅        |  ✅ buffered only  | Free (shares the native body); **throws** on a streamed response          |
 | `res.formData()` / `res.type`                                |       ✅        |         ❌         | Not implemented                                                           |
-| `AbortSignal` (`init.signal`)                                |       ✅        |      ❌ no-op      | Use `timeoutMs`; real cancellation is planned                             |
+| `AbortSignal` (`init.signal`)                                |       ✅        |         ✅         | Full WHATWG semantics — rejects with the signal's exact `reason`          |
 | `redirect`                                                   |       ✅        |         ✅         | `follow`, `manual`, and `error`; defaults to `follow`                     |
 | `credentials` / `mode` / `cache`                             |       ✅        |         ❌         | Ignored (no browser DOM context)                                          |
 | **TLS/HTTP2 fingerprint control**                            |       ❌        |         ✅         | `impersonate`, `tlsOptions`, `platform`, ...                              |
@@ -229,12 +229,12 @@ The streaming path closes three divergences the buffered path has — `204` → 
 - **Re-readable Bodies** (buffered mode): Calling multiple body accessors on a single response succeeds rather than throwing a single-use stream error. With `stream: true` the spec behaviour applies instead.
 - **`clone()` on a streamed response throws**: `tee()` would buffer without bound. See [above](#streaming-response-bodies).
 - **Error timing under `stream: true`**: mid-body failures reject the stream read, not the `fetch()` promise.
+- **Abort semantics**: an abort rejects with the signal's exact `reason` (identity-preserved, per WHATWG — never wrapped in a `FetchError`); on a streamed response after headers, the body stream _errors_ with that reason rather than closing. Consumer cancellation (`reader.cancel()`, `response.cancel()`) stays a clean close. `timeoutMs` is independent of `AbortSignal.timeout()`: the former rejects with `FetchError` `code: 'TIMEOUT'`, the latter with its `TimeoutError` `DOMException`; when both are set the first to fire wins.
 - **`redirect: 'manual'` Behavior**: Exposes 3xx status codes and `Location` headers directly to JS for per-hop validation.
 - **`statusText`**: Standardized canonical status phrase instead of raw HTTP/1.x wire text.
 
 ### Unsupported Features
 
-- `init.signal` / `AbortSignal`: Accepted as parameter but currently a no-op; use `timeoutMs`, or `cancel()` on a streamed response.
 - `res.formData()` / `res.type`: Not implemented.
 - `FormData` & `ReadableStream` **request** bodies: Both throw on attempt. (Response streaming _is_ supported via `stream: true`.)
 - Browser-specific context options: `credentials`, `mode`, `cache`, `integrity`, `referrer`, `keepalive` are ignored.
@@ -295,9 +295,10 @@ const bytes = await res.bytes()
 
 Shipped in 1.2.0: **streaming response downloads** with end-to-end backpressure (`stream: true`) and `clone()` on buffered responses.
 
+Shipped since: **native `AbortSignal` cancellation** wired into the Rust request futures — pre-flight, connect/TLS/headers, and per-chunk on both body paths; rejection (and streamed-body error) is the signal's own `reason`, identity-preserved.
+
 Still planned:
 
-1. **Native `AbortSignal` Cancellation** wired directly into Rust request futures.
-2. **Streaming Uploads** (`ReadableStream` request body). Blocked on a design decision, not effort: without a known length HTTP/1.1 falls back to `Transfer-Encoding: chunked`, and browsers essentially never chunk uploads — so a naive implementation would be an observable fingerprint tell. The plan is to require a known length and make chunked an explicit opt-in.
-3. **Browser-Exact `FormData` Serialization**.
-4. **Zero-copy chunks** via `Bytes::try_into_mut()` on the streaming path, if measurement justifies it — a Node `Buffer` is writable while `Bytes` may share immutable storage, so it is only sound when unique ownership is proven.
+1. **Streaming Uploads** (`ReadableStream` request body). Blocked on a design decision, not effort: without a known length HTTP/1.1 falls back to `Transfer-Encoding: chunked`, and browsers essentially never chunk uploads — so a naive implementation would be an observable fingerprint tell. The plan is to require a known length and make chunked an explicit opt-in.
+2. **Browser-Exact `FormData` Serialization**.
+3. **Zero-copy chunks** via `Bytes::try_into_mut()` on the streaming path, if measurement justifies it — a Node `Buffer` is writable while `Bytes` may share immutable storage, so it is only sound when unique ownership is proven.
