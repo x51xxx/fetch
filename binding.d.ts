@@ -142,9 +142,14 @@ export interface FetchOptions {
    * SSRF-sensitive callers must use `redirect: "manual"`, validate each
    * Location, and provide a new pin per hop. Ignored when `proxy` is set
    * because the proxy performs resolution.
-   * Requests carrying this option use a one-off client rather than the
-   * process-wide client cache; with `session` set, the one-off client
-   * still shares that session's cookie jar.
+   * Pinned requests reuse a pooled client (and its keep-alive
+   * connections) keyed by the client settings plus the URL host and the
+   * selected address set (order-insensitive, duplicates ignored); a
+   * different address set always gets a different client, so a pooled
+   * connection never goes to an address outside the pin it was opened
+   * for. Pinned clients live in their own LRU so they cannot evict
+   * unpinned/session clients. With `session` set, the pinned client
+   * shares that session's cookie jar.
    */
   resolve?: Record<string, string | Array<string>>
   /**
@@ -156,13 +161,13 @@ export interface FetchOptions {
   redirect?: string
   /**
    * Opaque session id. Calls sharing the same (`impersonate`, `platform`,
-   * `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one
-   * underlying client, and the persistent cookie jar is keyed by the
-   * session id alone — cookies carry across calls, fingerprint settings,
-   * and `resolve` one-off clients the way they would in a real browser
-   * tab. Omit for stateless, cookie-less calls (the default) — this avoids
-   * unrelated callers on the same profile ever sharing cookies by
-   * accident.
+   * `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`,
+   * `tlsOptions`, selected `resolve` pin) reuse one underlying client, and
+   * the persistent cookie jar is keyed by the session id alone — cookies
+   * carry across calls, fingerprint settings, and `resolve` pins the way
+   * they would in a real browser tab. Omit for stateless, cookie-less
+   * calls (the default) — this avoids unrelated callers on the same
+   * profile ever sharing cookies by accident.
    */
   session?: string
   /** Overall request timeout in milliseconds. */

@@ -44,8 +44,8 @@ struct TlsOptionsKey {
 /// share a client and its connection pool; unequal keys get isolated clients.
 /// The persistent cookie jar is deliberately NOT per-key: it's keyed by the
 /// `session` id alone (see `session_jar`), so cookies follow a session across
-/// fingerprint settings and `resolve` one-off clients, while two different
-/// `session` ids still never see each other's cookies.
+/// fingerprint settings and `resolve` pins, while two different `session` ids
+/// still never see each other's cookies.
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct ClientKey {
     impersonate: String,
@@ -55,11 +55,39 @@ struct ClientKey {
     tls_max_version: Option<String>,
     http_version: Option<String>,
     tls_options: Option<TlsOptionsKey>,
+    /// The `resolve` pin selected for this request, if any. Part of the key —
+    /// and the *only* source `build_client` installs a DNS override from — so a
+    /// pooled client can by construction never hold a connection for `host`
+    /// to an address outside `addrs`: a different validated address set is a
+    /// different key and therefore a different client and connection pool.
+    pin: Option<ResolveOverride>,
 }
 
+/// A selected `resolve` pin in canonical form (see `ResolveOverride::new`).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct ResolveOverride {
+    /// The request URL's host exactly as `http::Uri` parsed it (IPv6 brackets
+    /// stripped), **not** case-folded. wreq looks the override up with an
+    /// exact string match on the connecting URI's host, and `index.js` passes
+    /// string URLs through unnormalised; folding case here would let
+    /// `Example.test` and `example.test` share a client whose override matches
+    /// only the first spelling, sending the second through system DNS — a
+    /// silent pin bypass. Two spellings therefore cost two clients, never a
+    /// weaker pin.
     host: String,
+    /// Sorted and de-duplicated, so the same validated address set always
+    /// maps to the same key regardless of the order the caller listed it in.
+    /// The list is a set: connection-attempt order follows this sorted order,
+    /// not the caller's.
     addrs: Vec<SocketAddr>,
+}
+
+impl ResolveOverride {
+    fn new(host: String, mut addrs: Vec<SocketAddr>) -> Self {
+        addrs.sort_unstable();
+        addrs.dedup();
+        Self { host, addrs }
+    }
 }
 
 struct SelectedResolve<'a> {
@@ -77,10 +105,26 @@ type ClientCache = Mutex<HashMap<ClientKey, CachedClient>>;
 
 static CLIENTS: OnceLock<ClientCache> = OnceLock::new();
 
+/// Clients whose key carries a `resolve` pin live in their own LRU.
+static PINNED_CLIENTS: OnceLock<ClientCache> = OnceLock::new();
+
 /// Bound the process-wide cache even when callers pass arbitrary session ids
 /// or TLS overrides. Evicted clients are dropped; in-flight requests keep the
 /// clone they already received.
 const MAX_CACHED_CLIENTS: usize = 256;
+
+/// Separate, smaller bound for pinned clients. The two populations have very
+/// different cardinality: unpinned keys are one per fingerprint/session
+/// configuration (a handful per process), while pinned keys are one per
+/// host x validated-address-set, so an SSRF-pinning crawler touching thousands
+/// of hosts produces thousands of keys. Sharing one LRU would let that churn
+/// evict the few long-lived session clients — dropping their warm connections
+/// and, for `random`/`weighted_random`, re-rolling the profile a session was
+/// supposed to keep. 128 comfortably covers the hosts a crawler has in flight
+/// at once, and anything colder than that has usually outlived wreq's ~90 s
+/// idle-connection timeout anyway, so evicting it loses no live connection.
+const MAX_CACHED_PINNED_CLIENTS: usize = 128;
+const _: () = assert!(MAX_CACHED_PINNED_CLIENTS < MAX_CACHED_CLIENTS);
 
 struct SessionJar {
     jar: Arc<Jar>,
@@ -93,7 +137,8 @@ static SESSION_JARS: OnceLock<SessionJarMap> = OnceLock::new();
 
 /// Same scale as the client cache: live jars are the ones cached clients (or
 /// in-flight requests) still reference, and those are bounded by
-/// `MAX_CACHED_CLIENTS`.
+/// `MAX_CACHED_CLIENTS` + `MAX_CACHED_PINNED_CLIENTS` (the eviction below
+/// never drops a referenced jar, so this is a soft bound).
 const MAX_SESSION_JARS: usize = MAX_CACHED_CLIENTS;
 
 /// A buffered API still needs a hard ceiling to avoid an untrusted response
@@ -277,17 +322,18 @@ fn platform_name(platform: Platform) -> String {
     }
 }
 
-fn client_cache() -> &'static ClientCache {
-    CLIENTS.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn lock_client_cache() -> Result<MutexGuard<'static, HashMap<ClientKey, CachedClient>>> {
-    client_cache().lock().map_err(|_| {
-        Error::new(
-            Status::GenericFailure,
-            "client cache is unavailable because a previous operation panicked",
-        )
-    })
+fn lock_client_cache(
+    cache: &'static OnceLock<ClientCache>,
+) -> Result<MutexGuard<'static, HashMap<ClientKey, CachedClient>>> {
+    cache
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| {
+            Error::new(
+                Status::GenericFailure,
+                "client cache is unavailable because a previous operation panicked",
+            )
+        })
 }
 
 fn lock_session_jars() -> Result<MutexGuard<'static, HashMap<String, SessionJar>>> {
@@ -303,11 +349,11 @@ fn lock_session_jars() -> Result<MutexGuard<'static, HashMap<String, SessionJar>
 }
 
 /// One cookie jar per session id, shared by every client built for that
-/// session — the cached per-`ClientKey` clients and the one-off clients built
-/// for `resolve` requests — so cookies follow the session the way they follow
-/// a browser tab. Lock order: this may be called while the client cache lock
-/// is held (client cache → session jars); nothing locks in the other
-/// direction.
+/// session — the cached per-`ClientKey` clients, pinned (`resolve`) ones
+/// included — so cookies follow the session the way they follow a browser tab.
+/// Lock order: this may be called while one of the client cache locks is held
+/// (client cache → session jars); nothing locks in the other direction, and
+/// the two client caches are never held at the same time.
 fn session_jar(session: &str) -> Result<Arc<Jar>> {
     let mut jars = lock_session_jars()?;
     if let Some(entry) = jars.get_mut(session) {
@@ -587,13 +633,13 @@ fn select_resolve_override(
         })
         .collect::<Result<Vec<_>>>()?;
 
-    Ok(Some(ResolveOverride {
-        host: request_host.to_string(),
-        addrs,
-    }))
+    Ok(Some(ResolveOverride::new(request_host.to_string(), addrs)))
 }
 
-fn build_client(key: &ClientKey, resolve: Option<&ResolveOverride>) -> Result<Client> {
+/// Builds the client for `key`. The DNS override (if any) comes from
+/// `key.pin` and nowhere else, which is what keeps a cached pinned client's
+/// connections inside the address set its key names.
+fn build_client(key: &ClientKey) -> Result<Client> {
     let platform = key.platform.as_deref().map(parse_platform).transpose()?;
     let mut emulation = resolve_emulation(&key.impersonate, platform)?;
 
@@ -643,8 +689,8 @@ fn build_client(key: &ClientKey, resolve: Option<&ResolveOverride>) -> Result<Cl
         builder = builder.cookie_provider(session_jar(session)?);
     }
 
-    if let Some(resolve) = resolve {
-        builder = builder.resolve_to_addrs(resolve.host.clone(), resolve.addrs.clone());
+    if let Some(pin) = &key.pin {
+        builder = builder.resolve_to_addrs(pin.host.clone(), pin.addrs.clone());
     }
     if let Some(version) = &key.tls_min_version {
         builder = builder.tls_min_version(parse_tls_version(version)?);
@@ -691,27 +737,24 @@ fn build_client(key: &ClientKey, resolve: Option<&ResolveOverride>) -> Result<Cl
 /// `session_jar`) is only attached when `session` is set, so anonymous calls
 /// never accidentally share cookies with unrelated callers that happen to use
 /// the same profile.
+///
+/// Keys carrying a `resolve` pin go to a separate, smaller LRU
+/// (`PINNED_CLIENTS`, see `MAX_CACHED_PINNED_CLIENTS`) so high-cardinality
+/// pinned traffic cannot evict the long-lived unpinned/session clients.
 fn get_or_build_client(key: ClientKey) -> Result<Client> {
+    let (cache, cap) = cache_for(&key);
     // Keep the lock through construction. Client construction performs no
     // network I/O, and this stops two concurrent first calls with the same
     // key from racing to build two clients.
-    let mut cache = lock_client_cache()?;
+    let mut cache = lock_client_cache(cache)?;
     if let Some(entry) = cache.get_mut(&key) {
         entry.last_used = Instant::now();
         return Ok(entry.client.clone());
     }
 
-    let client = build_client(&key, None)?;
+    let client = build_client(&key)?;
 
-    if cache.len() >= MAX_CACHED_CLIENTS {
-        if let Some(oldest_key) = cache
-            .iter()
-            .min_by_key(|(_, entry)| entry.last_used)
-            .map(|(key, _)| key.clone())
-        {
-            cache.remove(&oldest_key);
-        }
-    }
+    evict_oldest_if_full(&mut cache, cap, |entry| entry.last_used);
     cache.insert(
         key,
         CachedClient {
@@ -720,6 +763,34 @@ fn get_or_build_client(key: ClientKey) -> Result<Client> {
         },
     );
     Ok(client)
+}
+
+/// Which LRU (and its bound) a key belongs to.
+fn cache_for(key: &ClientKey) -> (&'static OnceLock<ClientCache>, usize) {
+    if key.pin.is_some() {
+        (&PINNED_CLIENTS, MAX_CACHED_PINNED_CLIENTS)
+    } else {
+        (&CLIENTS, MAX_CACHED_CLIENTS)
+    }
+}
+
+/// Makes room for one insert by dropping the least recently used entry once
+/// `map` holds `cap` entries.
+fn evict_oldest_if_full<K: Clone + Eq + std::hash::Hash, V>(
+    map: &mut HashMap<K, V>,
+    cap: usize,
+    last_used: impl Fn(&V) -> Instant,
+) {
+    if map.len() < cap {
+        return;
+    }
+    if let Some(oldest_key) = map
+        .iter()
+        .min_by_key(|(_, entry)| last_used(entry))
+        .map(|(key, _)| key.clone())
+    {
+        map.remove(&oldest_key);
+    }
 }
 
 #[napi(object)]
@@ -763,9 +834,14 @@ pub struct FetchOptions {
     /// SSRF-sensitive callers must use `redirect: "manual"`, validate each
     /// Location, and provide a new pin per hop. Ignored when `proxy` is set
     /// because the proxy performs resolution.
-    /// Requests carrying this option use a one-off client rather than the
-    /// process-wide client cache; with `session` set, the one-off client
-    /// still shares that session's cookie jar.
+    /// Pinned requests reuse a pooled client (and its keep-alive
+    /// connections) keyed by the client settings plus the URL host and the
+    /// selected address set (order-insensitive, duplicates ignored); a
+    /// different address set always gets a different client, so a pooled
+    /// connection never goes to an address outside the pin it was opened
+    /// for. Pinned clients live in their own LRU so they cannot evict
+    /// unpinned/session clients. With `session` set, the pinned client
+    /// shares that session's cookie jar.
     pub resolve: Option<HashMap<String, Either<String, Vec<String>>>>,
     /// WHATWG redirect handling: "follow" (the default), "manual" (return the
     /// 3xx response), or "error" (reject on a redirect). Per-request: calls on
@@ -773,13 +849,13 @@ pub struct FetchOptions {
     /// redirect mode.
     pub redirect: Option<String>,
     /// Opaque session id. Calls sharing the same (`impersonate`, `platform`,
-    /// `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`) reuse one
-    /// underlying client, and the persistent cookie jar is keyed by the
-    /// session id alone — cookies carry across calls, fingerprint settings,
-    /// and `resolve` one-off clients the way they would in a real browser
-    /// tab. Omit for stateless, cookie-less calls (the default) — this avoids
-    /// unrelated callers on the same profile ever sharing cookies by
-    /// accident.
+    /// `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`,
+    /// `tlsOptions`, selected `resolve` pin) reuse one underlying client, and
+    /// the persistent cookie jar is keyed by the session id alone — cookies
+    /// carry across calls, fingerprint settings, and `resolve` pins the way
+    /// they would in a real browser tab. Omit for stateless, cookie-less
+    /// calls (the default) — this avoids unrelated callers on the same
+    /// profile ever sharing cookies by accident.
     pub session: Option<String>,
     /// Overall request timeout in milliseconds.
     pub timeout_ms: Option<u32>,
@@ -853,12 +929,16 @@ pub fn list_impersonate_presets() -> Vec<ImpersonatePresetInfo> {
 /// already-cloned client (and its reference to the old jar).
 #[napi]
 pub fn clear_session(session: String) -> Result<u32> {
-    let removed = {
-        let mut cache = lock_client_cache()?;
+    // Both caches, one at a time: a pinned client left behind would keep the
+    // session's old jar alive and fork its cookies from the fresh jar the next
+    // unpinned call creates.
+    let mut removed = 0u32;
+    for cache in [&CLIENTS, &PINNED_CLIENTS] {
+        let mut cache = lock_client_cache(cache)?;
         let count_before = cache.len();
         cache.retain(|key, _| key.session.as_deref() != Some(session.as_str()));
-        (count_before - cache.len()) as u32
-    };
+        removed += (count_before - cache.len()) as u32;
+    }
     lock_session_jars()?.remove(&session);
     Ok(removed)
 }
@@ -867,12 +947,12 @@ pub fn clear_session(session: String) -> Result<u32> {
 /// boundaries; it also drops all in-memory session cookies.
 #[napi]
 pub fn clear_client_cache() -> Result<u32> {
-    let count = {
-        let mut cache = lock_client_cache()?;
-        let count = cache.len() as u32;
+    let mut count = 0u32;
+    for cache in [&CLIENTS, &PINNED_CLIENTS] {
+        let mut cache = lock_client_cache(cache)?;
+        count += cache.len() as u32;
         cache.clear();
-        count
-    };
+    }
     lock_session_jars()?.clear();
     Ok(count)
 }
@@ -1019,6 +1099,18 @@ fn classify_request_error(e: &wreq::Error) -> &'static str {
 /// because it compares only the options that exist today.
 async fn send_request(url: String, options: FetchOptions) -> Result<(wreq::Response, String)> {
     let redirect_policy = parse_redirect_policy(options.redirect.as_deref())?;
+
+    // When a proxy is configured the proxy resolves the origin hostname, so
+    // `resolve` is deliberately ignored and the ordinary cached client is used.
+    // Otherwise the selected pin becomes part of the client key: pinned
+    // requests reuse a pooled client (and its warm TCP/TLS/HTTP-2 connections)
+    // per host + validated address set. A `resolve` map with no entry for this
+    // URL's host selects no pin and behaves exactly like an unpinned request.
+    let pin = match (options.proxy.as_ref(), options.resolve.as_ref()) {
+        (None, Some(resolve)) => select_resolve_override(&url, resolve)?,
+        _ => None,
+    };
+
     let client_key = ClientKey {
         impersonate: options
             .impersonate
@@ -1036,22 +1128,10 @@ async fn send_request(url: String, options: FetchOptions) -> Result<(wreq::Respo
             permute_extensions: o.permute_extensions,
             session_ticket: o.session_ticket,
         }),
+        pin,
     };
 
-    // DNS pins are target-specific and normally ephemeral, so never put their
-    // clients (and connections bound to those IPs) in the shared LRU. When a
-    // proxy is configured the proxy resolves the origin hostname; in that case
-    // resolve is deliberately ignored and the ordinary cached client is safe.
-    let client = if options.proxy.is_none() {
-        if let Some(resolve) = options.resolve.as_ref() {
-            let selected = select_resolve_override(&url, resolve)?;
-            build_client(&client_key, selected.as_ref())?
-        } else {
-            get_or_build_client(client_key)?
-        }
-    } else {
-        get_or_build_client(client_key)?
-    };
+    let client = get_or_build_client(client_key)?;
 
     let method = match options.method {
         Some(m) => Method::from_bytes(m.as_bytes())
@@ -1705,4 +1785,93 @@ async fn fetch_streaming_impl(
             max_bytes,
         })),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    //! Pure-logic tests only. Anything returning `napi::Result` drags
+    //! `napi::Error`'s `Drop` (a `napi_delete_reference` call) into the test
+    //! binary, which cannot link outside a Node process -- so pin selection
+    //! end to end, cache routing under churn and `clearSession` are covered by
+    //! `test/pinned-pool.test.js` against the real addon instead.
+    use super::*;
+
+    fn addrs(raw: &[&str]) -> Vec<SocketAddr> {
+        raw.iter().map(|a| a.parse().unwrap()).collect()
+    }
+
+    fn pin(host: &str, raw: &[&str]) -> ResolveOverride {
+        ResolveOverride::new(host.to_string(), addrs(raw))
+    }
+
+    fn key(pin: Option<ResolveOverride>) -> ClientKey {
+        ClientKey {
+            impersonate: DEFAULT_IMPERSONATE.to_string(),
+            platform: None,
+            session: Some("s".to_string()),
+            tls_min_version: None,
+            tls_max_version: None,
+            http_version: None,
+            tls_options: None,
+            pin,
+        }
+    }
+
+    #[test]
+    fn pin_key_ignores_address_order_and_duplicates() {
+        let a = pin(
+            "pin.test",
+            &["10.0.0.2:443", "10.0.0.1:443", "10.0.0.2:443"],
+        );
+        let b = pin("pin.test", &["10.0.0.1:443", "10.0.0.2:443"]);
+        assert_eq!(a, b);
+        assert_eq!(a.addrs, addrs(&["10.0.0.1:443", "10.0.0.2:443"]));
+        // Equal pins make equal client keys, so they land in one cache slot.
+        let set: HashSet<ClientKey> = [key(Some(a)), key(Some(b))].into();
+        assert_eq!(set.len(), 1);
+    }
+
+    #[test]
+    fn pin_key_distinguishes_address_set_host_port_and_spelling() {
+        let base = pin("pin.test", &["10.0.0.1:443"]);
+        let others = [
+            pin("pin.test", &["10.0.0.1:443", "10.0.0.2:443"]), // superset
+            pin("pin.test", &["10.0.0.9:443"]),                 // other address
+            pin("pin.test", &["[::1]:443"]),                    // other family
+            pin("pin.test", &["10.0.0.1:8443"]),                // other port
+            pin("other.test", &["10.0.0.1:443"]),               // other host
+            // Not case-folded: wreq's override lookup is an exact string match
+            // on the URI host, so two spellings must never share one client.
+            pin("Pin.test", &["10.0.0.1:443"]),
+        ];
+        for other in &others {
+            assert_ne!(&base, other);
+            assert!(key(Some(base.clone())) != key(Some(other.clone())));
+        }
+        assert!(key(None) != key(Some(base)));
+    }
+
+    #[test]
+    fn pinned_keys_route_to_their_own_smaller_lru() {
+        let (unpinned_cache, unpinned_cap) = cache_for(&key(None));
+        let (pinned_cache, pinned_cap) = cache_for(&key(Some(pin("pin.test", &["10.0.0.1:443"]))));
+        assert!(std::ptr::eq(unpinned_cache, &CLIENTS));
+        assert_eq!(unpinned_cap, MAX_CACHED_CLIENTS);
+        assert!(std::ptr::eq(pinned_cache, &PINNED_CLIENTS));
+        assert_eq!(pinned_cap, MAX_CACHED_PINNED_CLIENTS);
+        assert!(!std::ptr::eq(unpinned_cache, pinned_cache));
+    }
+
+    #[test]
+    fn eviction_drops_only_the_least_recently_used_entry_at_the_cap() {
+        let t0 = Instant::now();
+        let mut map: HashMap<u32, Instant> = (0..3u32)
+            .map(|i| (i, t0 + Duration::from_secs(u64::from(i))))
+            .collect();
+        evict_oldest_if_full(&mut map, 4, |t| *t);
+        assert_eq!(map.len(), 3, "below the cap nothing is evicted");
+        evict_oldest_if_full(&mut map, 3, |t| *t);
+        assert_eq!(map.len(), 2);
+        assert!(!map.contains_key(&0), "the oldest entry goes first");
+    }
 }

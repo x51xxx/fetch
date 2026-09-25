@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`resolve`-pinned requests now reuse a pooled client** instead of building
+  a single-use client per request, so a caller that pins every request (e.g.
+  for SSRF safety) keeps its keep-alive TCP/TLS/HTTP-2 connections instead of
+  paying a fresh handshake each time. The selected pin — the URL host exactly as
+  written plus the address set, sorted and de-duplicated (so connection
+  attempts now follow sorted address order, not the order the caller listed
+  the addresses in) — is part of the client cache key and is the only source
+  of the client's DNS override, so a pooled connection can never reach an
+  address outside the pin it was opened for; a
+  different validated address set always gets a different client. The host is
+  deliberately not case-folded (wreq matches overrides by the exact URI host),
+  so two spellings cost two clients rather than weakening a pin. Pinned clients
+  live in their own LRU bounded at 128, separate from the 256-entry cache of
+  unpinned clients, so high-cardinality pinned traffic cannot evict long-lived
+  session clients (or re-roll a `random` profile). A `resolve` map with no entry
+  for the URL's host now uses the ordinary cached client, same as no `resolve`.
+  Cookie semantics are unchanged: the jar still follows `session` alone, and
+  `clearSession()` / `clearClientCache()` drop pinned clients too (counted in
+  their return value), so a cached pinned client never keeps a cleared
+  session's old cookie jar alive.
+
 ## [1.3.0] - 2026-08-05
 
 ### Added

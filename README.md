@@ -352,6 +352,7 @@ async function ssrfSafeFetch(input, maxRedirects = 10) {
 >
 > - `resolve` map pins are **never automatically extended** to cross-host redirects. Use `redirect: "manual"` and repeat DNS resolution, validation, and pinning for each `Location`.
 > - `resolve` is ignored when `proxy` is set (the proxy resolves origin hostnames). Combining both triggers a one-time `MYFETCH_RESOLVE_IGNORED` process warning.
+> - Pinned requests are pooled per host + address set, so pinning every request keeps keep-alive connections warm. The guarantee is per pin: a pooled client never connects **the pinned host** to an address outside its set. Any _other_ hostname the client reaches (e.g. a followed redirect) goes through system DNS, exactly as before — which is why the loop above uses `redirect: "manual"`.
 
 ### 8. Streaming a Large Download to Disk
 
@@ -564,10 +565,10 @@ JS Application
                  └── wreq + wreq-util (BoringSSL & Browser Emulation Profiles)
 ```
 
-1. **Client Caching & LRU**: Each unique configuration key (`impersonate`, `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`, `tlsOptions`) maps to a cached `wreq::Client` in an LRU cache (bounded to 256 instances).
+1. **Client Caching & LRU**: Each unique configuration key (`impersonate`, `platform`, `session`, `tlsMinVersion`, `tlsMaxVersion`, `httpVersion`, `tlsOptions`) maps to a cached `wreq::Client` in an LRU cache (bounded to 256 instances).
 2. **Session Cookie Jars**: Cookie storage is keyed by `session` ID alone across client instances, allowing cookie persistence even when changing impersonation settings or using `resolve`.
 3. **Random Impersonation**: `random` / `weighted_random` profiles pin their selected profile to the client cache key on first invocation, maintaining consistent fingerprints throughout a session.
-4. **Resolution Bypassing**: Requests with `resolve` build single-use clients to prevent host IP overrides from polluting shared connection pools.
+4. **Pinned Client Pool**: A request whose `resolve` map has an entry for the URL's host adds that pin — the host exactly as written in the URL plus the **sorted, de-duplicated** address set — to its cache key, so repeated pinned requests reuse one client and its warm TCP/TLS/HTTP-2 connections. The DNS override is installed from the key alone, so a pooled connection can never lead to an address outside the pin it was opened for: a different validated address set is a different client. Pinned clients live in a separate, smaller LRU (128 instances) because their keys are high-cardinality (one per host × address set) — a crawler touching thousands of hosts cannot evict the few long-lived unpinned/session clients. A `resolve` map with no entry for the URL's host behaves exactly like no `resolve` at all.
 5. **Compression**: `Accept-Encoding` is the impersonated profile's own header, verbatim and in its own position (`chrome_147` → `gzip, deflate, br, zstd`; `okhttp_5` → `gzip`) — not a value derived from which decoders are compiled in. Responses are decoded transparently and the encoding headers are stripped. `deflate` is accepted in **both** readings of the token: zlib-wrapped (RFC 1950) and raw (RFC 1951, what PHP/Apache `zlib.output_compression` sends), picked by sniffing the first two bytes. Browsers accept either, so impersonating one means matching that tolerance rather than the stricter spec.
 
 ### Empirically Verified Behavior

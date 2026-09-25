@@ -207,14 +207,15 @@ test('session + resolve shares the session cookie jar with cached clients', asyn
     },
     async (base) => {
       const session = `resolve-shared-jar-${process.pid}`
-      // A resolve map with no matching entry still routes the call through a
-      // one-off client — the cookie it stores must land in the session's jar.
-      const oneOff = { resolve: { 'unmatched.test': '203.0.113.1' } }
-      await fetch(`${base}/set`, { session, ...oneOff })
+      // A matching pin routes the call through a separate (pinned) client —
+      // the cookie it stores must land in the session's jar, shared with the
+      // session's unpinned client.
+      const pin = { resolve: { '127.0.0.1': '127.0.0.1' } }
+      await fetch(`${base}/set`, { session, ...pin })
       const cached = await fetch(`${base}/check`, { session })
       assert.equal(await cached.text(), 'sid=pinned-set')
-      // And the reverse direction: a later one-off client sees the jar too.
-      const pinned = await fetch(`${base}/check`, { session, ...oneOff })
+      // And the reverse direction: the pinned client sees the jar too.
+      const pinned = await fetch(`${base}/check`, { session, ...pin })
       assert.equal(await pinned.text(), 'sid=pinned-set')
     }
   )

@@ -63,6 +63,13 @@ export interface FetchInit {
    * pinned, so SSRF-sensitive callers must use `redirect: "manual"` and re-pin
    * each validated hop. Ignored when `proxy` is set. With `session` set, the
    * pinned request shares that session's cookie jar.
+   *
+   * Pinned requests reuse a pooled client (keep-alive TCP/TLS/HTTP-2
+   * connections) per client settings + URL host + address set; the address
+   * list is treated as a set (order and duplicates ignored). A different
+   * address set always gets a different client, so a pooled connection never
+   * goes to an address outside the pin it was opened for. Pinned clients sit
+   * in their own LRU (128) and cannot evict unpinned/session clients.
    */
   resolve?: Record<string, string | string[]>
   /** WHATWG redirect handling. Defaults to `"follow"`. Also read from a `Request` input. */
