@@ -111,6 +111,26 @@ test('fetch follows redirects and reports redirected + final url', async () => {
   )
 })
 
+test('a non-ASCII header value is decoded byte-for-byte (latin1), not dropped', async () => {
+  // tradeinn.com sends raw UTF-8 in Location; it used to surface as ''.
+  const target = '/bikeinn/ru/garmin-Велокомпьютер-edge/139015283/p'
+  const wire = Buffer.from(target, 'utf8').toString('latin1')
+  await withServer(
+    (req, res) => {
+      res.writeHead(301, { location: wire, 'x-note': 'café' })
+      res.end()
+    },
+    async (base) => {
+      const res = await fetch(`${base}/start`, { redirect: 'manual' })
+      assert.equal(res.status, 301)
+      assert.equal(res.headers.get('location'), wire)
+      assert.equal(Buffer.from(res.headers.get('location'), 'latin1').toString('utf8'), target)
+      // A latin1 value round-trips as itself.
+      assert.equal(res.headers.get('x-note'), 'café')
+    }
+  )
+})
+
 test('redirect manual returns the 3xx response without issuing the next request', async () => {
   let requests = 0
   await withServer(

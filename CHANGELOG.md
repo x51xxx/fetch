@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A response header value with bytes outside visible ASCII is no longer
+  emptied.** Values were read with `HeaderValue::to_str()`, which rejects any
+  such byte, and the error became `""` — so a server sending raw UTF-8 in a
+  header lost it entirely. The visible symptom was `Location`: tradeinn.com
+  redirects stale product URLs to `/bikeinn/ru/garmin-Велокомпьютер-…/p`, and
+  `redirect: 'manual'` callers saw a 301 with `location: ""`, i.e. no target.
+  Values are now isomorphically decoded (each byte → the code point of the same
+  number), which is what WHATWG `Headers` and undici do; a caller that knows a
+  value is UTF-8 recovers it with `Buffer.from(value, 'latin1').toString('utf8')`.
+
 ### Changed
 
 - **`resolve`-pinned requests now reuse a pooled client** instead of building

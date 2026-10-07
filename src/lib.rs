@@ -1200,6 +1200,20 @@ async fn send_request(url: String, options: FetchOptions) -> Result<(wreq::Respo
     Ok((response, requested_url))
 }
 
+/// A header value as WHATWG `Headers` and undici expose it: every byte becomes
+/// the code point of the same number (isomorphic decode, i.e. latin1).
+///
+/// `HeaderValue::to_str()` refuses anything outside visible ASCII, and the old
+/// `.unwrap_or_default()` turned such a value into an EMPTY string. Real servers
+/// send raw UTF-8 there: tradeinn.com answers stale product URLs with
+/// `Location: /bikeinn/ru/garmin-Велокомпьютер-…/p`, which came through as
+/// `location: ""` — a redirect with no target. Decoding byte-for-byte loses
+/// nothing: a caller that knows the bytes are UTF-8 recovers them with
+/// `Buffer.from(value, 'latin1').toString('utf8')`.
+fn isomorphic_decode(bytes: &[u8]) -> String {
+    bytes.iter().map(|&b| b as char).collect()
+}
+
 /// Extracts the response metadata every entry point needs. Kept separate so the
 /// buffered and streaming paths cannot disagree about `redirected` or header
 /// casing/order.
@@ -1220,12 +1234,7 @@ fn response_meta(
     let headers = response
         .headers()
         .iter()
-        .map(|(k, v)| {
-            (
-                k.as_str().to_string(),
-                v.to_str().unwrap_or_default().to_string(),
-            )
-        })
+        .map(|(k, v)| (k.as_str().to_string(), isomorphic_decode(v.as_bytes())))
         .collect();
 
     (
