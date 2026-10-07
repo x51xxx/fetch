@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-07
+
 ### Fixed
 
 - **A response header value with bytes outside visible ASCII is no longer
@@ -318,6 +320,7 @@ run failed while assembling the platform packages (see the build fix below).
   against Node's built-in `fetch`, plus an HTML report and methodology
   writeup under `docs/`.
 
+[1.4.0]: https://github.com/x51xxx/fetch/releases/tag/v1.4.0
 [1.3.0]: https://github.com/x51xxx/fetch/releases/tag/v1.3.0
 [1.2.1]: https://github.com/x51xxx/fetch/releases/tag/v1.2.1
 [1.2.0]: https://github.com/x51xxx/fetch/releases/tag/v1.2.0
